@@ -4,6 +4,8 @@ import { initReactI18next } from 'react-i18next';
 import enTranslation from './en.json';
 import taTranslation from './ta.json';
 
+const savedLanguage = typeof window !== 'undefined' ? localStorage.getItem('agronex_language') : null;
+
 i18n
   .use(initReactI18next)
   .init({
@@ -11,7 +13,7 @@ i18n
       en: { translation: enTranslation },
       ta: { translation: taTranslation }
     },
-    lng: 'en', // default language
+    lng: savedLanguage || 'en', // persisted or default language
     fallbackLng: 'en',
     interpolation: {
       escapeValue: false // react already safes from xss

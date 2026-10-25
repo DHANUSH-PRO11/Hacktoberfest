@@ -85,7 +85,7 @@ export default function Weather() {
           <span>{isTamil ? "முகப்பு" : "Dashboard"}</span>
         </Link>
         <h1 className="text-xl font-extrabold text-agronex-deep font-display">
-          {isTamil ? "பண்ணை வானிலை முன்னறிவிப்பு" : "Farm Weather Radar"}
+          {isTamil ? "பண்ணை மணிநேர வானிலை முன்னறிவிப்பு" : "Hourly Farm Weather Forecast"}
         </h1>
         <div className="w-16"></div>
       </div>
@@ -106,11 +106,16 @@ export default function Weather() {
                   <h3 className="font-bold text-base text-agronex-deep">
                     {locLoading ? "Detecting location..." : location ? `${location.city}, ${location.state}` : "Unknown"}
                   </h3>
+                  {weather?.location && (
+                    <p className="text-[10px] text-gray-400 font-mono">
+                      Lat: {Number(weather.location.latitude).toFixed(4)}, Lon: {Number(weather.location.longitude).toFixed(4)}
+                    </p>
+                  )}
                 </div>
               </div>
               <button 
                 onClick={() => setSearchMode(true)} 
-                className="text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/50 px-3.5 py-2 rounded-xl transition-all"
+                className="text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/50 px-3.5 py-2 rounded-xl transition-all cursor-pointer"
               >
                 {isTamil ? "மாற்று" : "Change City"}
               </button>
@@ -181,18 +186,34 @@ export default function Weather() {
           <div className="text-center py-12 bg-white rounded-3xl border border-gray-100 shadow-xs">
             <div className="w-10 h-10 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin mx-auto mb-3"></div>
             <p className="font-semibold text-gray-600 text-sm">
-              {isTamil ? "நேரலை வானிலை தரவு பெறப்படுகிறது..." : "Fetching live agricultural weather radar..."}
+              {isTamil ? "வானிலை முன்னறிவிப்பு பெறப்படுகிறது..." : "Fetching numerical weather forecast..."}
             </p>
           </div>
         ) : weather && weather.current ? (
           <div className="space-y-6">
-            {/* Current Weather Card */}
+            {/* Forecast Stale Warning Banner if applicable */}
+            {weather.warning && (
+              <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-2xl flex items-center justify-between text-xs text-amber-900">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                  <span>{weather.warning}</span>
+                </div>
+                <span className="font-mono text-[10px] bg-amber-100 px-2 py-0.5 rounded text-amber-800 shrink-0">STALE CACHE</span>
+              </div>
+            )}
+
+            {/* Current Weather Summary Card */}
             <div className="bg-gradient-to-br from-[#0B5D3B] via-[#0f7249] to-[#16A36A] rounded-3xl p-6 sm:p-8 text-white shadow-lg relative overflow-hidden">
               <div className="relative z-10 flex justify-between items-start">
                 <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/15 text-emerald-100 inline-block mb-3 border border-white/20">
-                    Live Farm Atmosphere
-                  </span>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/15 text-emerald-100 inline-block border border-white/20">
+                      Open-Meteo Numerical Forecast
+                    </span>
+                    <span className="text-[10px] text-emerald-200">
+                      7-day horizon • 24h Hourly
+                    </span>
+                  </div>
                   <div className="flex items-baseline gap-2">
                     <p className="text-5xl sm:text-6xl font-black font-display tracking-tight">
                       {Math.round(weather.current.temperature)}°
@@ -209,7 +230,10 @@ export default function Weather() {
                     <CloudSun size={32} />
                   </div>
                   <p className="text-xs font-medium text-emerald-100">
-                    Feels like {Math.round(weather.current.temperature + 2)}°C
+                    Feels like {Math.round(weather.current.apparent_temperature || (weather.current.temperature + 2))}°C
+                  </p>
+                  <p className="text-[10px] text-emerald-200 mt-1 font-mono">
+                    {weather.cache_status === 'fresh' && weather.is_cached ? `Cached (${Math.round(weather.cache_age_seconds)}s)` : 'Live Fetch'}
                   </p>
                 </div>
               </div>
@@ -232,75 +256,107 @@ export default function Weather() {
                 </div>
 
                 <div className="bg-black/15 backdrop-blur-xs p-2.5 rounded-xl border border-white/10">
-                  <span className="opacity-70 text-[10px] uppercase font-bold block mb-0.5">Spray Status</span>
+                  <span className="opacity-70 text-[10px] uppercase font-bold block mb-0.5">Precipitation</span>
                   <div className="flex items-center gap-1.5 font-bold text-sm">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                    <span>{weather.current.wind_speed < 15 ? "Suitable" : "Careful"}</span>
+                    <CloudRain size={14} className="text-cyan-300" />
+                    <span>{weather.current.precipitation || 0} mm</span>
                   </div>
                 </div>
 
                 <div className="bg-black/15 backdrop-blur-xs p-2.5 rounded-xl border border-white/10">
-                  <span className="opacity-70 text-[10px] uppercase font-bold block mb-0.5">Updated</span>
+                  <span className="opacity-70 text-[10px] uppercase font-bold block mb-0.5">Retrieved</span>
                   <div className="font-semibold text-[11px] text-emerald-100 truncate">
                     {new Date(weather.last_updated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
                 </div>
               </div>
+
+              {/* Attribution and Grounding Notice */}
+              <div className="mt-3 pt-2 border-t border-white/10 text-[10px] text-emerald-200/90 leading-tight">
+                {weather.data_accuracy_notice || "Forecast values are derived from numerical weather prediction models and are not measurements from an on-field physical sensor station."}
+              </div>
               
               <CloudSun size={200} className="absolute -bottom-16 -right-16 opacity-10 pointer-events-none text-white" />
             </div>
 
-            {/* Configured Agricultural Spray Safety Rule Engine */}
+            {/* Configured Agricultural Spray-Condition Advisory Engine (Section 5) */}
             {(() => {
-              const precip = weather.current.precipitation || 0;
-              const wind = weather.current.wind_speed || 0;
-              let maxRainProb = 0;
-              if (weather.hourly && weather.hourly.length > 0) {
-                maxRainProb = Math.max(...weather.hourly.slice(0, 24).map(h => h.precipitation_probability || 0));
-              }
-
-              const isRainRisk = maxRainProb > 60 || precip > 2.0;
-              const isWindRisk = wind > 25;
+              const spray = weather.spray_advisory || {};
+              const level = spray.advisory_level || "FAVORABLE_WINDOW";
+              const isHighRisk = level === "HIGH_RISK";
+              const isCaution = level === "CAUTION";
 
               let badgeColor = "bg-emerald-50 border-emerald-200 text-emerald-900";
-              let badgeTitle = isTamil ? "தெளிப்புக்கு சாதகமான நேரம் (Safe Window)" : "Favorable Spray Window";
-              let badgeMsg = isTamil 
-                ? "அடுத்த 24 மணி நேரத்தில் குறைந்த காற்று மற்றும் குறைந்த மழை வாய்ப்பு (<60%)."
-                : "Wind is moderate and rain probability is below 60% in the immediate 24-hour forecast.";
-
-              if (isRainRisk) {
+              let badgeTitle = isTamil ? "தெளிப்புக்கு சாதகமான வானிலை இடைவெளி" : "Weather Window May Be Favorable for Spraying";
+              if (isHighRisk) {
                 badgeColor = "bg-red-50 border-red-200 text-red-900";
-                badgeTitle = isTamil ? "தெளிக்க வேண்டாம் (Do Not Spray)" : "Unfavorable Spray Window (Rain Hazard)";
-                badgeMsg = isTamil
-                  ? `மழை வாய்ப்பு ${maxRainProb}% (>60%) அல்லது மழை அளவு >2 மி.மீ. மருந்து அடித்துச் செல்லப்படும் அபாயம்.`
-                  : `Rain probability reaches ${maxRainProb}% (>60%) or precipitation >2mm. High chemical wash-off and runoff risk.`;
-              } else if (isWindRisk) {
+                badgeTitle = isTamil ? "தெளிக்க வேண்டாம் — அதிக அபாயம்" : "Weather Conditions Unfavorable — High Wash-off Risk";
+              } else if (isCaution) {
                 badgeColor = "bg-amber-50 border-amber-200 text-amber-900";
-                badgeTitle = isTamil ? "எச்சரிக்கையுடன் தெளிக்கவும் (Caution Spraying)" : "Caution Spraying (Drift Hazard)";
-                badgeMsg = isTamil
-                  ? `காற்றின் வேகம் ${wind} கி.மீ/மணி (>25 கி.மீ/மணி). மருந்து காற்றில் பரவி வீணாகும் அபாயம்.`
-                  : `Wind speed is ${wind} km/h (>25 km/h). Significant risk of chemical drift to non-target areas.`;
+                badgeTitle = isTamil ? "எச்சரிக்கையுடன் செயல்படவும் — காற்று அபாயம்" : "Spray Caution Advised — Wind Drift Risk";
               }
 
+              const explanation = (isTamil && spray.explanation_ta) ? spray.explanation_ta : (spray.explanation || "");
+              const actuals = spray.actual_forecast_values || {};
+              const thresholds = spray.threshold_values || { rain_probability_pct: 60, precipitation_mm: 2.0, wind_speed_kmh: 25.0 };
+
               return (
-                <div className={`p-4 sm:p-5 rounded-3xl border ${badgeColor} space-y-2.5 shadow-2xs`}>
+                <div className={`p-5 rounded-3xl border ${badgeColor} space-y-3 shadow-2xs`}>
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/70 border border-current">
-                      {isTamil ? "தானியங்கி தெளிப்பு விதிமுறைகள்" : "Configured Agricultural Spray Rules"}
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/80 border border-current">
+                      {isTamil ? "வேளாண் தெளிப்பு பாதுகாப்பு வழிகாட்டி" : "Agricultural Spray-Condition Advisory (Section 5)"}
                     </span>
-                    <span className="text-[10px] text-gray-500 font-medium">
-                      {weather.offline_fallback ? "Offline Fallback" : "Live Open-Meteo Data"}
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-white/70">
+                      Level: {level}
                     </span>
                   </div>
+
                   <div>
-                    <h4 className="font-extrabold text-sm">{badgeTitle}</h4>
-                    <p className="text-xs leading-relaxed opacity-90 mt-0.5">{badgeMsg}</p>
+                    <h4 className="font-extrabold text-base">{badgeTitle}</h4>
+                    <p className="text-xs leading-relaxed opacity-95 mt-1">{explanation}</p>
                   </div>
-                  <div className="pt-2 border-t border-black/5 text-[11px] opacity-75 leading-relaxed">
-                    <strong>{isTamil ? "முக்கிய அறிவிப்பு:" : "Regulatory Notice:"} </strong>
-                    {isTamil
-                      ? "வானிலை கணிப்புகள் எதிர்கால நிலைக்கு முழு உத்தரவாதம் அளிக்காது. பூச்சிக்கொல்லி லேபிளில் உள்ள வழிகாட்டுதல்கள், பாதுகாப்பு ஆடைகள் மற்றும் வட்டார வேளாண்மை அலுவலர் ஆலோசனைகளுக்கே முதன்மையான முன்னுரிமை."
-                      : "Forecasts do not guarantee future conditions. Registered pesticide label instructions, safety buffer zones, and agricultural university guidelines supersede automated mathematical thresholds."}
+
+                  {/* Triggered Rules List if any */}
+                  {spray.triggered_rules && spray.triggered_rules.length > 0 && (
+                    <div className="space-y-1">
+                      <span className="text-[10px] uppercase font-bold tracking-wider opacity-75">
+                        {isTamil ? "தூண்டப்பட்ட எச்சரிக்கை விதிகள்:" : "Triggered Warning Triggers:"}
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {spray.triggered_rules.map((rule, idx) => (
+                          <span key={idx} className="bg-white/85 text-red-900 border border-red-200 text-[11px] font-semibold px-2 py-0.5 rounded-md">
+                            ⚠️ {rule}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Actual Values vs Configurable Caution Thresholds */}
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-black/5 text-[11px]">
+                    <div className="bg-white/70 p-2 rounded-xl">
+                      <span className="block text-[10px] opacity-70">Wind Speed</span>
+                      <strong className="text-xs">{actuals.wind_speed_kmh ?? "--"} km/h</strong>
+                      <span className="block text-[9px] text-gray-500">Max: {thresholds.wind_speed_kmh} km/h</span>
+                    </div>
+                    <div className="bg-white/70 p-2 rounded-xl">
+                      <span className="block text-[10px] opacity-70">Rain Probability</span>
+                      <strong className="text-xs">{actuals.rain_probability_pct ?? "--"}%</strong>
+                      <span className="block text-[9px] text-gray-500">Max: {thresholds.rain_probability_pct}%</span>
+                    </div>
+                    <div className="bg-white/70 p-2 rounded-xl">
+                      <span className="block text-[10px] opacity-70">Precipitation</span>
+                      <strong className="text-xs">{actuals.precipitation_mm ?? "--"} mm</strong>
+                      <span className="block text-[9px] text-gray-500">Max: {thresholds.precipitation_mm} mm</span>
+                    </div>
+                  </div>
+
+                  {/* Mandatory Agronomic Safety Limitations Notice */}
+                  <div className="pt-2 border-t border-black/5 text-[11px] opacity-80 leading-relaxed">
+                    <strong>{isTamil ? "முக்கிய வேளாண் கட்டுப்பாடு:" : "Agronomic Safety Limitations:"} </strong>
+                    {spray.limitations || (isTamil
+                      ? "வானிலை சாதகமாக இருப்பது மட்டுமே தெளிப்பை பாதுகாப்பானதாக்காது. பூச்சிக்கொல்லி லேபிள் வழிகாட்டுதல், பயிர் வளர்ச்சி பருவம், பாதுகாப்பு இடைவெளிகளை கட்டாயம் பின்பற்றவும்."
+                      : "Favorable forecast conditions alone do not certify chemical spraying is universally safe. Applicators must consult pesticide product labels, crop growth stage, mandatory buffer zones, and local agricultural advice.")}
                   </div>
                 </div>
               );
@@ -309,20 +365,31 @@ export default function Weather() {
             {/* Today Hourly Forecast */}
             {weather.hourly && weather.hourly.length > 0 && (
               <div>
-                <h3 className="font-extrabold text-base text-agronex-deep mb-3 font-display">
-                  {isTamil ? "இன்றைய மணிநேர முன்னறிவிப்பு" : "Hourly Rain & Temperature Radar"}
-                </h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-extrabold text-base text-agronex-deep font-display">
+                    {isTamil ? "இன்றைய மணிநேர வானிலை முன்னறிவிப்பு" : "Hourly Weather Forecast"}
+                  </h3>
+                  <span className="text-[11px] text-gray-500 font-medium">
+                    Units: °C • % • km/h
+                  </span>
+                </div>
                 <div className="bg-white rounded-3xl border border-gray-100 shadow-xs overflow-hidden divide-y divide-gray-100">
-                  {[weather.hourly[0], weather.hourly[3], weather.hourly[6], weather.hourly[9], weather.hourly[12]].filter(Boolean).map((hourData, idx) => {
+                  {[weather.hourly[0], weather.hourly[3], weather.hourly[6], weather.hourly[9], weather.hourly[12], weather.hourly[15]].filter(Boolean).map((hourData, idx) => {
                     const timeObj = new Date(hourData.time);
                     const timeStr = timeObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     return (
                       <div key={idx} className="flex items-center justify-between p-3.5 px-5 hover:bg-gray-50/60 transition-colors">
-                        <span className="w-20 font-bold text-xs text-gray-700">{timeStr}</span>
+                        <span className="w-16 font-bold text-xs text-gray-700">{timeStr}</span>
                         <div className="flex items-center gap-1.5 text-blue-600 font-semibold text-xs">
                           <CloudRain size={15} />
                           <span>{hourData.precipitation_probability}% {isTamil ? "மழை" : "Rain"}</span>
                         </div>
+                        {hourData.wind_speed !== undefined && hourData.wind_speed !== null && (
+                          <div className="hidden sm:flex items-center gap-1 text-teal-700 font-medium text-xs">
+                            <Wind size={13} />
+                            <span>{hourData.wind_speed} km/h</span>
+                          </div>
+                        )}
                         <div className="w-16 text-right font-extrabold text-sm text-agronex-deep">
                           {Math.round(hourData.temperature)}°C
                         </div>
@@ -402,14 +469,20 @@ export default function Weather() {
             </div>
           </div>
         ) : weather && !weather.success ? (
-          <div className="bg-red-50 p-6 rounded-3xl border border-red-100 text-center">
-            <AlertTriangle className="text-red-400 mx-auto mb-3" size={32} />
-            <h3 className="text-red-800 font-bold mb-1">
-              {isTamil ? "நேரடி வானிலைத் தரவைப் பெற முடியவில்லை." : "Unable to fetch live weather data."}
+          <div className="bg-red-50 p-6 rounded-3xl border border-red-100 text-center space-y-3">
+            <AlertTriangle className="text-red-400 mx-auto mb-1" size={32} />
+            <h3 className="text-red-800 font-bold text-base">
+              {isTamil ? "வானிலை முன்னறிவிப்புத் தரவைப் பெற முடியவில்லை" : "Weather Forecast Service Unavailable"}
             </h3>
-            <p className="text-red-600 text-sm font-medium">
-              {weather.error || (isTamil ? "தரவு இல்லை" : "Data unavailable")}
+            <p className="text-red-600 text-xs font-medium max-w-md mx-auto">
+              {weather.error || (isTamil ? "தற்காலிக சேவையகப் பிழை. மாதிரித் தரவுகள் போலியாக உருவாக்கப்படாது." : "Open-Meteo forecast service temporarily unavailable. No fake data is fabricated.")}
             </p>
+            <button
+              onClick={() => location && fetchWeather(location.latitude, location.longitude)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            >
+              <span>{isTamil ? "மீண்டும் முயற்சி" : "Retry Connection"}</span>
+            </button>
           </div>
         ) : null}
       </div>

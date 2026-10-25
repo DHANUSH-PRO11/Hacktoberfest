@@ -210,11 +210,28 @@ export default function Schemes() {
                   <div className="flex items-start gap-2 text-gray-600">
                     <FileText size={14} className="text-gray-400 shrink-0 mt-0.5" />
                     <div>
-                      <strong className="text-gray-800">{isTamil ? 'தேவையானவை:' : 'Requirements:'} </strong>
-                      <span>{isTamil && scheme.eligibility_ta ? scheme.eligibility_ta : scheme.eligibility}</span>
+                      <strong className="text-gray-800">{isTamil ? 'தேவையான ஆவணங்கள்:' : 'Required Documents:'} </strong>
+                      <span>{isTamil && scheme.required_documents_ta ? scheme.required_documents_ta : (scheme.required_documents || scheme.eligibility)}</span>
                     </div>
                   </div>
+
+                  {(scheme.application_steps || scheme.application_steps_ta) && (
+                    <div className="bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-100/70 text-[11px] text-emerald-900">
+                      <strong className="block mb-0.5 text-emerald-950 font-bold">
+                        {isTamil ? 'விண்ணப்பிக்கும் முறை:' : 'Application Steps:'}
+                      </strong>
+                      <p className="leading-relaxed">
+                        {isTamil && scheme.application_steps_ta ? scheme.application_steps_ta : scheme.application_steps}
+                      </p>
+                    </div>
+                  )}
                 </div>
+
+                {scheme.last_verified && (
+                  <div className="mt-2 text-[10px] text-gray-400 flex items-center justify-between">
+                    <span>{isTamil ? `சரிபார்க்கப்பட்டது: ${scheme.last_verified}` : `Verified: ${scheme.last_verified}`}</span>
+                  </div>
+                )}
               </div>
 
               {/* Action Button: Verified Portal Link */}
@@ -237,6 +254,14 @@ export default function Schemes() {
           ))}
         </div>
       )}
+
+      {/* Statutory Disclaimer Footer */}
+      <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 text-[11px] text-gray-500 leading-relaxed">
+        <strong>{isTamil ? "சட்டரீதியான அறிவிப்பு: " : "Statutory Agricultural Program Notice: "}</strong>
+        {isTamil
+          ? "அக்ரோநெக்ஸ் AI விவசாயிகளுக்கு மத்திய மற்றும் மாநில அரசு நலத்திட்டங்கள் குறித்த பொது விழிப்புணர்வு தகவல்களை மட்டுமே வழங்குகிறது. இத்தளம் அரசு திட்ட தகுதிக்கோ, மானிய ஒப்புதலுக்கோ அல்லது நிதி விடுவிப்புக்கோ எந்தவித உத்தரவாதமும் அளிக்காது. விண்ணப்பங்களின் இறுதி ஏற்பு அரசு துறை அதிகாரிகளின் நேரடி ஆவண சரிபார்ப்புக்கு உட்பட்டது."
+          : "AgroNex AI provides informational access to officially announced public agricultural programs. AgroNex does not process government benefits or guarantee subsidy approval. Sanction and disbursement remain under the sole jurisdiction of designated government ministries and field inspection authorities."}
+      </div>
     </div>
   );
 }

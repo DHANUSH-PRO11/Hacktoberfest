@@ -44,9 +44,16 @@ backend/models/*.bak
 # Local databases and uploads
 *.db
 uploads/
+backend/uploads/
 
 # Local test audio files
 *.wav
 *.mp3
 *.m4a
+
+# Coverage and cache
+.coverage
+htmlcov/
+.pytest_cache/
+
 

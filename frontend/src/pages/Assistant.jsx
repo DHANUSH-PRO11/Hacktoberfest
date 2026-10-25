@@ -633,7 +633,8 @@ export default function Assistant() {
           detected_language: agentRes.language,
           audio_base64: agentRes.audio_base64,
           cropAnalysis: agentRes.crop_prediction,
-          sprayAdvisory: agentRes.spray_advisory
+          sprayAdvisory: agentRes.spray_advisory,
+          explanation: agentRes.explanation
         };
       } else {
         const formData = new FormData();
@@ -741,7 +742,8 @@ export default function Assistant() {
           reply: result.recommendation,
           audio_base64: result.audio_base64,
           cropAnalysis: result.crop_prediction,
-          sprayAdvisory: result.spray_advisory
+          sprayAdvisory: result.spray_advisory,
+          explanation: result.explanation
         };
       } else {
         // Standard chat with context grounding
@@ -763,7 +765,8 @@ export default function Assistant() {
         data = {
           reply: result.recommendation || result.reply,
           audio_base64: result.audio_base64,
-          sprayAdvisory: result.spray_advisory || null
+          sprayAdvisory: result.spray_advisory || null,
+          explanation: result.explanation || null
         };
       }
 
@@ -775,7 +778,9 @@ export default function Assistant() {
         audioBase64: data.audio_base64,
         cropAnalysis: data.cropAnalysis || null,
         sprayAdvisory: data.sprayAdvisory || null,
+        explanation: data.explanation || null,
       };
+
 
       setMessages(prev => [...prev, newAiMessage]);
 
@@ -809,14 +814,18 @@ export default function Assistant() {
 
   const quickPrompts = i18n.language === 'ta' 
     ? [
-        "தக்காளி இலையில் மஞ்சள் புள்ளி உள்ளது, என்ன உரம் இடலாம்?",
-        "நெற்பயிருக்கு யூரியா எப்போது இட வேண்டும்?",
-        "இன்றைய வானிலை அடிப்படையில் பூச்சி மருந்து தெளிக்கலாமா?"
+        "மாதிரி என்ன அறிகுறிகளைக் கண்டறிந்தது?",
+        "பயிருக்கு சிகிச்சையளிக்கும் முன் நான் எதைச் சரிபார்க்க வேண்டும்?",
+        "இந்த முடிவை தமிழில் விளக்குங்கள்.",
+        "வரவிருக்கும் வானிலை இந்த பயிரை எவ்வாறு பாதிக்கும்?",
+        "நான் எப்போது KVK நிபுணரை அணுக வேண்டும்?"
       ]
     : [
-        "Yellow spots on tomato leaves, what fertilizer to use?",
-        "When is the best time to apply fertilizer for paddy?",
-        "Is today's weather suitable for pesticide spray?"
+        "What symptoms did the model detect?",
+        "What should I check before treating this plant?",
+        "Explain this result in Tamil.",
+        "How might the upcoming weather affect this crop?",
+        "When should I consult a KVK expert?"
       ];
 
   return (
@@ -971,8 +980,94 @@ export default function Assistant() {
                 </div>
               )}
 
+              {/* Gemma 4 Multimodal Structured Explanation */}
+              {msg.explanation && (
+                <div className="mb-2.5 p-3.5 rounded-2xl bg-emerald-50/90 border border-emerald-200/80 text-xs text-gray-800 space-y-2.5">
+                  <div className="flex items-center justify-between border-b border-emerald-100 pb-1.5">
+                    <span className="font-bold text-emerald-950 flex items-center gap-1.5">
+                      <Sparkles size={13} className="text-emerald-600" />
+                      <span>{msg.explanation.model_used || "Gemma 4 Multimodal Assessment"}</span>
+                    </span>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full font-mono">
+                      Explainable AI
+                    </span>
+                  </div>
+
+                  {msg.explanation.summary && (
+                    <p className="text-emerald-900 font-medium leading-relaxed bg-white/60 p-2 rounded-xl border border-emerald-100/60">
+                      {msg.explanation.summary}
+                    </p>
+                  )}
+
+                  {(msg.explanation.observed_symptoms || msg.explanation.observations) && (
+                    <div className="space-y-0.5">
+                      <strong className="text-emerald-950 font-semibold block">🔍 Symptoms & Observations:</strong>
+                      <p className="text-gray-700 leading-relaxed">{msg.explanation.observed_symptoms || msg.explanation.observations}</p>
+                    </div>
+                  )}
+
+                  {msg.explanation.possible_causes && (
+                    <div className="space-y-0.5">
+                      <strong className="text-emerald-950 font-semibold block">🧪 Suspected Pathological Causes:</strong>
+                      <p className="text-gray-700 leading-relaxed">{msg.explanation.possible_causes}</p>
+                    </div>
+                  )}
+
+                  {msg.explanation.alternative_explanations && msg.explanation.alternative_explanations.length > 0 && (
+                    <div className="space-y-0.5">
+                      <strong className="text-emerald-950 font-semibold block">🔄 Alternative Possibilities:</strong>
+                      <p className="text-gray-600 text-[11px] leading-relaxed">
+                        {msg.explanation.alternative_explanations.join(" • ")}
+                      </p>
+                    </div>
+                  )}
+
+                  {(msg.explanation.weather_influence || msg.explanation.weather_risk_factor) && (
+                    <div className="space-y-0.5">
+                      <strong className="text-emerald-950 font-semibold block">🌦️ Weather Factor:</strong>
+                      <p className="text-gray-700 leading-relaxed">{msg.explanation.weather_influence || msg.explanation.weather_risk_factor}</p>
+                    </div>
+                  )}
+
+                  {msg.explanation.recommended_next_steps && msg.explanation.recommended_next_steps.length > 0 && (
+                    <div className="space-y-1">
+                      <strong className="text-emerald-950 font-semibold block">✅ Recommended Next Steps:</strong>
+                      <ul className="list-disc list-inside space-y-0.5 text-gray-700">
+                        {msg.explanation.recommended_next_steps.map((st, i) => (
+                          <li key={i}>{st}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {msg.explanation.prevention_guidance && msg.explanation.prevention_guidance.length > 0 && (
+                    <div className="space-y-1">
+                      <strong className="text-emerald-950 font-semibold block">🛡️ Prevention Guidance:</strong>
+                      <ul className="list-disc list-inside space-y-0.5 text-gray-700 text-[11px]">
+                        {msg.explanation.prevention_guidance.map((pv, i) => (
+                          <li key={i}>{pv}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {(msg.explanation.uncertainty_and_limitations || msg.explanation.uncertainty_warnings) && (
+                    <div className="p-2 bg-amber-50/90 rounded-xl border border-amber-200/60 text-[11px] text-amber-900 leading-relaxed">
+                      <strong>⚠️ Agricultural Safety Notice:</strong> {msg.explanation.uncertainty_and_limitations || msg.explanation.uncertainty_warnings}
+                    </div>
+                  )}
+
+                  {(msg.explanation.kvk_consultation_guidance || msg.explanation.expert_consultation_triggers) && (
+                    <div className="p-2 bg-emerald-100/60 rounded-xl border border-emerald-200/60 text-[11px] text-emerald-900 leading-relaxed">
+                      <strong>🏛️ KVK Expert Consultation:</strong> {msg.explanation.kvk_consultation_guidance || msg.explanation.expert_consultation_triggers}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Message text */}
               <div className="whitespace-pre-wrap">{msg.text}</div>
+
 
               {/* AI Voice playback button */}
               {msg.type === 'ai' && msg.audioBase64 && (

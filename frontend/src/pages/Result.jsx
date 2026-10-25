@@ -1,16 +1,40 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, ArrowLeft, CheckCircle, Bot, ArrowRight, Volume2, VolumeX, Loader2, ChevronDown, ChevronUp, Activity } from 'lucide-react';
+import { 
+  AlertTriangle, ArrowLeft, CheckCircle, Bot, ArrowRight, 
+  Volume2, VolumeX, Loader2, ChevronDown, ChevronUp, Activity,
+  CloudRain, Wind, Droplets, ShieldCheck, Sparkles 
+} from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import WeatherAlerts from '../components/WeatherAlerts';
+import { useLocation as useGeoLocation } from '../hooks/useLocation';
 import { API_BASE_URL } from '../config/api';
 
 export default function Result() {
   const { t, i18n } = useTranslation();
   const location = useLocation();
-  const { result, imageUrl } = location.state || {};
+  const { result, imageUrl, isDemo, demoLabel, demoLabelTa } = location.state || {};
   const isTamil = i18n.language === 'ta';
   const apiUrl = API_BASE_URL;
+
+  const { location: geoLoc } = useGeoLocation();
+  const [sprayData, setSprayData] = useState(null);
+
+  useEffect(() => {
+    if (!geoLoc?.latitude || !geoLoc?.longitude) return;
+    const fetchSpray = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/weather/spray-advisory?lat=${geoLoc.latitude}&lon=${geoLoc.longitude}&lang=${isTamil ? 'ta' : 'en'}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSprayData(data);
+        }
+      } catch (e) {
+        console.warn("Spray advisory fetch error:", e);
+      }
+    };
+    fetchSpray();
+  }, [geoLoc?.latitude, geoLoc?.longitude, isTamil]);
 
   const [copilotLoading, setCopilotLoading] = useState(false);
   const [copilotReply, setCopilotReply] = useState(null);
@@ -124,6 +148,24 @@ export default function Result() {
 
       {/* Main Diagnostic Card */}
       <div className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100">
+        {/* Demonstration Mode Banner if testing reference sample */}
+        {isDemo && (
+          <div className="bg-blue-50 border-b border-blue-200 px-4 py-2.5 text-xs text-blue-900 flex items-center justify-between shadow-2xs">
+            <div className="flex items-center gap-2">
+              <span className="text-base">🧪</span>
+              <span>
+                <strong>{isTamil ? "டெமோ மாதிரி முறை:" : "Demonstration Benchmark Mode:"} </strong>
+                {isTamil
+                  ? `PlantVillage தொகுப்பிலிருந்து பெறப்பட்ட மாதிரி (${demoLabelTa || demoLabel}). இது மாதிரி ஆய்வுக்கானது, நேரடி பண்ணை முடிவு அல்ல.`
+                  : `Evaluating PlantVillage reference sample (${demoLabel}). Demonstration mode for testing, not an on-field diagnosis.`}
+              </span>
+            </div>
+            <span className="font-mono text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded uppercase shrink-0">
+              DEMO
+            </span>
+          </div>
+        )}
+
         {/* Status Header Banner */}
         <div className={`p-6 sm:p-8 text-center text-white relative overflow-hidden ${
           is_healthy 
@@ -148,17 +190,33 @@ export default function Result() {
           </div>
         </div>
 
-        {/* Low Confidence Warning Box */}
-        {isUncertain && (
+        {/* Prediction vs Diagnosis Distinction Notice */}
+        <div className="bg-emerald-950/90 text-emerald-100 text-[11px] px-4 py-2 flex items-center justify-between border-b border-emerald-800">
+          <span className="font-semibold flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>{isTamil ? "AI காட்சி மாதிரி கணிப்பு (அனுமானம்) — ஆய்வக பரிசோதனை அல்ல" : "AI Visual Hypothesis — Model observation, not a laboratory confirmation"}</span>
+          </span>
+          <span className="text-[10px] bg-emerald-800/80 px-2 py-0.5 rounded font-mono">
+            {result.explanation?.model_used || "Gemma 4"}
+          </span>
+        </div>
+
+        {/* Low Confidence / Inconclusive Warning Box */}
+        {(isUncertain || result.is_inconclusive || result.status === "Inconclusive") && (
           <div className="m-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-3 text-xs text-amber-900">
-            <AlertTriangle size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <strong className="font-bold">{isTamil ? "கவனிக்கவும்: குறைந்த நம்பிக்கை நிலை" : "Low Confidence Observation"}</strong>
-              <p className="mt-0.5 text-amber-800 leading-relaxed">
-                {warning_message || (isTamil 
-                  ? "மாதிரி கணிப்பு உறுதிப்படுத்தப்பட்ட நோய் அல்ல. வேளாண்மை உதவி அலுவலர் அல்லது KVK மூலம் உறுதிப்படுத்துவது அவசியம்." 
-                  : "Visual observation is not a clinical diagnosis. Ground verification by an agricultural extension officer (KVK) is strongly advised.")}
+            <AlertTriangle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <strong className="font-bold text-amber-950">
+                {isTamil ? "⚠️ தெளிவற்ற பகுப்பாய்வு நிலை (Inconclusive Result)" : "⚠️ Inconclusive Analysis State"}
+              </strong>
+              <p className="text-amber-800 leading-relaxed">
+                {warning_message || result.uncertainty_reason || (isTamil 
+                  ? "மாதிரி கணிப்பு உறுதிப்படுத்தப்பட்ட நோய் அல்ல. இலை நிழல் அல்லது தெளிவின்மை காரணமாக துல்லியம் குறைவாக இருக்கலாம். நல்ல வெளிச்சத்தில் மீண்டும் படம் எடுக்கவும்." 
+                  : "Visual observation is inconclusive. For safe farming decisions, verify with an agricultural extension officer (KVK) and capture a clearer image with natural sunlight.")}
               </p>
+              <div className="text-[11px] text-amber-900/80 pt-1 font-medium">
+                Tip: Ensure steady camera focus, natural indirect sunlight, and clean leaf surface without shadows.
+              </div>
             </div>
           </div>
         )}
@@ -168,19 +226,35 @@ export default function Result() {
           {imageUrl && (
             <div className="flex items-center gap-4 bg-gray-50 p-3 rounded-2xl border border-gray-100">
               <img src={imageUrl} alt="Crop Leaf" className="w-16 h-16 object-cover rounded-xl border border-gray-200" />
-              <div>
+              <div className="flex-1">
                 <p className="text-xs font-bold text-gray-800">{crop} Leaf Analysis</p>
-                <p className="text-[11px] text-gray-500">Quality: <span className="font-semibold text-emerald-700">{quality_status || "Passed"}</span></p>
-                <p className="text-[11px] text-gray-500">Diagnosis Status: <span className="font-semibold">{status}</span></p>
+                <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                  <span className="text-[11px] text-gray-500">
+                    Quality: <span className="font-semibold text-emerald-700">{quality_status || "Passed"}</span>
+                    {result.quality_assessment?.quality_score !== undefined && (
+                      <span className="text-gray-400 font-mono ml-1">({Math.round(result.quality_assessment.quality_score * 100)}%)</span>
+                    )}
+                  </span>
+                  <span className="text-gray-300">•</span>
+                  <span className="text-[11px] text-gray-500">
+                    Engine: <span className="font-mono text-gray-700">{result.model_version || "EfficientNetV2-S"}</span>
+                  </span>
+                  {result.latency_ms && (
+                    <>
+                      <span className="text-gray-300">•</span>
+                      <span className="text-[11px] text-gray-400 font-mono">{result.latency_ms} ms</span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           )}
 
-          {/* Model Confidence Bar */}
+          {/* Model Confidence Bar & Interpretation */}
           <div>
             <div className="flex justify-between text-xs font-bold text-gray-700 mb-1.5">
               <span>Model Prediction Confidence</span>
-              <span className="text-agronex-deep">{confPercent}%</span>
+              <span className="text-agronex-deep font-mono">{confPercent}%</span>
             </div>
             <div className="w-full bg-gray-200 h-2.5 rounded-full overflow-hidden">
               <div 
@@ -190,6 +264,11 @@ export default function Result() {
                 style={{ width: `${Math.min(100, Math.max(10, confidence * 100))}%` }}
               />
             </div>
+            {result.confidence_interpretation && (
+              <p className="text-[11px] text-gray-500 mt-1.5 italic leading-tight">
+                ℹ️ {result.confidence_interpretation}
+              </p>
+            )}
           </div>
 
           {/* Differential Diagnoses / Alternative Possibilities */}
@@ -206,7 +285,7 @@ export default function Result() {
                   return (
                     <div key={idx} className="flex justify-between items-center text-xs text-gray-600 bg-white p-2 rounded-xl border border-gray-100/80">
                       <span className="truncate pr-2 font-medium">{pName}</span>
-                      <span className="font-bold text-gray-700 flex-shrink-0">{pPct}%</span>
+                      <span className="font-bold text-gray-700 flex-shrink-0 font-mono">{pPct}%</span>
                     </div>
                   );
                 })}
@@ -214,28 +293,178 @@ export default function Result() {
             </div>
           )}
 
-          {/* Actionable Recommendations Checklist */}
-          <div>
-            <h3 className="font-bold text-sm text-agronex-deep mb-2 font-display">
-              {t('what_to_do')}
-            </h3>
-            <div className="space-y-2 bg-gray-50 p-4 rounded-2xl border border-gray-100 text-xs text-gray-700">
-              <div className="flex items-start gap-2.5">
-                <CheckCircle size={15} className="text-emerald-600 mt-0.5 flex-shrink-0" />
-                <span>
-                  {is_healthy 
-                    ? "Maintain standard drip irrigation and scheduled balanced fertilizer intervals." 
-                    : "Isolate heavily affected foliage to prevent spore dispersal to adjacent plants."}
+          {/* ------------------------------------------------------------- */}
+          {/* Gemma 4 Explainable AI Section */}
+          {/* ------------------------------------------------------------- */}
+          {result.explanation && (
+            <div className="bg-gradient-to-br from-emerald-50/60 via-green-50/30 to-teal-50/40 p-5 rounded-3xl border border-emerald-200/80 shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-700 text-white flex items-center justify-center shadow-xs">
+                    <Sparkles size={16} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-agronex-deep text-sm font-display">
+                      {isTamil ? "Gemma 4 விளக்கக்கூடிய AI பகுப்பாய்வு" : "Gemma 4 Explainable AI Assessment"}
+                    </h3>
+                    <p className="text-[11px] text-gray-500">
+                      {isTamil ? "காட்சி அறிகுறிகள், காரணங்கள் மற்றும் வானிலை தொடர்பு" : "Visual symptoms, pathological causes & weather interaction"}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-mono">
+                  Multimodal Copilot
                 </span>
               </div>
-              <div className="flex items-start gap-2.5">
-                <CheckCircle size={15} className="text-emerald-600 mt-0.5 flex-shrink-0" />
-                <span>
-                  Check regional rainfall forecast below before applying any protective spray.
+
+              {/* 1. Visible Symptoms Observation */}
+              <div className="space-y-1 text-xs">
+                <span className="font-bold text-emerald-900 flex items-center gap-1.5">
+                  🔍 <span>{isTamil ? "கண்டறியப்பட்ட காட்சி அறிகுறிகள்:" : "What the Model Detected & Visual Observations:"}</span>
                 </span>
+                <p className="text-gray-700 leading-relaxed bg-white/80 p-3 rounded-xl border border-emerald-100/60">
+                  {result.explanation.observations}
+                </p>
               </div>
+
+              {/* 2. Pathological Causes */}
+              <div className="space-y-1 text-xs">
+                <span className="font-bold text-emerald-900 flex items-center gap-1.5">
+                  🧪 <span>{isTamil ? "சாத்தியமான காரணங்கள் & நுண்ணுயிரிகள்:" : "Possible Pathological Causes:"}</span>
+                </span>
+                <p className="text-gray-700 leading-relaxed bg-white/80 p-3 rounded-xl border border-emerald-100/60">
+                  {result.explanation.possible_causes}
+                </p>
+              </div>
+
+              {/* 3. Weather Risk Factor */}
+              {result.explanation.weather_risk_factor && (
+                <div className="space-y-1 text-xs">
+                  <span className="font-bold text-emerald-900 flex items-center gap-1.5">
+                    🌦️ <span>{isTamil ? "வானிலை தாக்கம் & சுற்றுச்சூழல் அபாயம்:" : "How Weather Affects Disease Risk:"}</span>
+                  </span>
+                  <p className="text-gray-700 leading-relaxed bg-white/80 p-3 rounded-xl border border-emerald-100/60">
+                    {result.explanation.weather_risk_factor}
+                  </p>
+                </div>
+              )}
+
+              {/* 4. Why Recommendations are Suggested */}
+              {result.explanation.why_recommendations && (
+                <div className="space-y-1 text-xs">
+                  <span className="font-bold text-emerald-900 flex items-center gap-1.5">
+                    💡 <span>{isTamil ? "பரிந்துரைகளுக்கான அறிவியல் விளக்கம்:" : "Why These Actions are Recommended:"}</span>
+                  </span>
+                  <p className="text-gray-700 leading-relaxed bg-white/80 p-3 rounded-xl border border-emerald-100/60">
+                    {result.explanation.why_recommendations}
+                  </p>
+                </div>
+              )}
+
+              {/* 5. Recommended Next Steps Checklist */}
+              {result.explanation.recommended_next_steps && result.explanation.recommended_next_steps.length > 0 && (
+                <div className="space-y-1.5 text-xs">
+                  <span className="font-bold text-emerald-900 flex items-center gap-1.5">
+                    ✅ <span>{isTamil ? "பரிந்துரைக்கப்பட்ட அடுத்த கட்ட நடவடிக்கைகள்:" : "Recommended Safe Next Steps:"}</span>
+                  </span>
+                  <div className="space-y-1.5">
+                    {result.explanation.recommended_next_steps.map((step, sIdx) => (
+                      <div key={sIdx} className="flex items-start gap-2 bg-white/90 p-2.5 rounded-xl border border-emerald-100/80 text-gray-700">
+                        <CheckCircle size={14} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+                        <span>{step}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 6. Qualified Expert Consultation Triggers */}
+              {result.explanation.expert_consultation_triggers && (
+                <div className="p-3 bg-amber-50/90 rounded-xl border border-amber-200/80 text-xs text-amber-900 space-y-1">
+                  <span className="font-bold flex items-center gap-1.5 text-amber-950">
+                    🏛️ <span>{isTamil ? "வேளாண் அலுவலர் / KVK ஆலோசனை பெற வேண்டிய தருணங்கள்:" : "When to Seek Qualified Agronomist (KVK) Advice:"}</span>
+                  </span>
+                  <p className="text-amber-800 leading-relaxed">
+                    {result.explanation.expert_consultation_triggers}
+                  </p>
+                </div>
+              )}
             </div>
-          </div>
+          )}
+
+
+          {/* ------------------------------------------------------------- */}
+          {/* Farm Safety & Spray-Condition Advisory Card (Module 3) */}
+          {/* ------------------------------------------------------------- */}
+          {sprayData && sprayData.advisory_level && (
+            <div className={`p-5 rounded-3xl border shadow-xs space-y-3 ${
+              sprayData.advisory_level === 'HIGH_RISK'
+                ? 'bg-red-50/90 border-red-200 text-red-950'
+                : sprayData.advisory_level === 'CAUTION'
+                  ? 'bg-amber-50/90 border-amber-200 text-amber-950'
+                  : 'bg-emerald-50/90 border-emerald-200 text-emerald-950'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">
+                    {sprayData.advisory_level === 'HIGH_RISK' ? '🚫' : sprayData.advisory_level === 'CAUTION' ? '⚠️' : '✅'}
+                  </span>
+                  <span className="text-xs font-bold uppercase tracking-wider">
+                    {isTamil ? 'வானிலை & தெளிப்பு பாதுகாப்பு ஆலோசனை' : 'Weather & Spray Safety Advisory (Module 3)'}
+                  </span>
+                </div>
+                <span className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full ${
+                  sprayData.advisory_level === 'HIGH_RISK'
+                    ? 'bg-red-100 text-red-800'
+                    : sprayData.advisory_level === 'CAUTION'
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-emerald-100 text-emerald-800'
+                }`}>
+                  {sprayData.advisory_level}
+                </span>
+              </div>
+
+              <p className="text-xs leading-relaxed font-medium">
+                {isTamil && sprayData.explanation_ta ? sprayData.explanation_ta : sprayData.explanation}
+              </p>
+
+              {sprayData.triggered_rules && sprayData.triggered_rules.length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase font-bold tracking-wider opacity-75">
+                    {isTamil ? 'தூண்டப்பட்ட எச்சரிக்கைகள்:' : 'Active Caution Triggers:'}
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {sprayData.triggered_rules.map((rule, idx) => (
+                      <span key={idx} className="bg-white/80 border border-current text-[11px] font-semibold px-2 py-0.5 rounded-md">
+                        {rule}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {sprayData.actual_forecast_values && (
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-black/5 text-[11px]">
+                  <div className="bg-white/70 p-2 rounded-xl">
+                    <span className="block text-[10px] opacity-70">Wind Speed</span>
+                    <strong>{sprayData.actual_forecast_values.wind_speed_kmh ?? '--'} km/h</strong>
+                  </div>
+                  <div className="bg-white/70 p-2 rounded-xl">
+                    <span className="block text-[10px] opacity-70">Rain Prob</span>
+                    <strong>{sprayData.actual_forecast_values.rain_probability_pct ?? '--'}%</strong>
+                  </div>
+                  <div className="bg-white/70 p-2 rounded-xl">
+                    <span className="block text-[10px] opacity-70">Precipitation</span>
+                    <strong>{sprayData.actual_forecast_values.precipitation_mm ?? '--'} mm</strong>
+                  </div>
+                </div>
+              )}
+
+              <p className="text-[10px] opacity-75 pt-1 border-t border-black/5 leading-tight">
+                {sprayData.limitations || "Favorable weather conditions do not guarantee spraying is universally safe. Applicators must consult chemical product labels, crop growth stage, and buffer zones."}
+              </p>
+            </div>
+          )}
 
           {/* ------------------------------------------------------------- */}
           {/* AgroNex AI Copilot Grounded Follow-up Section */}

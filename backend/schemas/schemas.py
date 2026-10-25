@@ -49,6 +49,24 @@ class Token(BaseModel):
 class TopPrediction(BaseModel):
     class_name: str
     confidence: float
+    display_name: Optional[str] = None
+    crop: Optional[str] = None
+    condition: Optional[str] = None
+    raw_score: Optional[float] = None
+    is_healthy: Optional[bool] = None
+
+class QualityIssue(BaseModel):
+    code: str
+    severity: str
+    message: str
+
+class QualityAssessment(BaseModel):
+    quality_status: str
+    quality_score: Optional[float] = None
+    detected_issues: List[QualityIssue] = []
+    user_facing_message: Optional[str] = None
+    photography_tips: List[str] = []
+    metrics: Optional[dict] = None
 
 class CropAnalysisBase(BaseModel):
     crop_type: str
@@ -60,7 +78,48 @@ class CropAnalysisBase(BaseModel):
 class CropAnalysisCreate(CropAnalysisBase):
     image_path: str
 
+class StructuredExplanation(BaseModel):
+    # Module 2 Canonical Structured Contract
+    summary: Optional[str] = None
+    observed_symptoms: Optional[Union[str, List[str]]] = None
+    possible_causes: Union[str, List[str]]
+    alternative_explanations: Optional[List[str]] = []
+    model_prediction_context: Optional[str] = None
+    weather_influence: Optional[str] = None
+    recommended_next_steps: List[str]
+    prevention_guidance: Optional[List[str]] = []
+    uncertainty_and_limitations: Optional[str] = None
+    kvk_consultation_guidance: Optional[str] = None
+
+    # Preserved Legacy / Backward-Compatible Aliases
+    observations: Optional[Union[str, List[str]]] = None
+    weather_risk_factor: Optional[str] = None
+    why_recommendations: Optional[str] = None
+    uncertainty_warnings: Optional[str] = None
+    expert_consultation_triggers: Optional[str] = None
+    disease_name: Optional[str] = None
+    symptoms: Optional[Union[str, List[str]]] = None
+    recommendations: Optional[List[str]] = None
+    preventive_measures: Optional[List[str]] = None
+    model_used: Optional[str] = "Gemma 4"
+    language: Optional[str] = "en"
+    is_fallback: Optional[bool] = False
+
 class CropAnalysisResponse(BaseModel):
+    # Module 1 Contract Fields
+    analysis_id: Optional[str] = None
+    predicted_class: Optional[str] = None
+    display_name: Optional[str] = None
+    model_score: Optional[float] = None
+    confidence_interpretation: Optional[str] = None
+    top_predictions: List[TopPrediction] = []
+    quality_assessment: Optional[QualityAssessment] = None
+    inconclusive: Optional[bool] = False
+    photography_tips: Optional[List[str]] = []
+    model_version: Optional[str] = None
+    processing_time_ms: Optional[float] = None
+
+    # Preserved Backward-Compatible Fields
     id: Optional[str] = None
     created_at: Optional[str] = None
     crop: str
@@ -68,7 +127,7 @@ class CropAnalysisResponse(BaseModel):
     confidence: float
     is_healthy: bool
     status: str
-    top_predictions: List[TopPrediction]
+    is_inconclusive: Optional[bool] = False
     disease: Optional[str] = None
     severity: Optional[str] = "Not determined"
     risk: Optional[str] = "Not determined"
@@ -78,15 +137,20 @@ class CropAnalysisResponse(BaseModel):
     latency_ms: Optional[float] = None
     preprocessing_mode: Optional[str] = "direct"
     tta_enabled: Optional[bool] = False
+    explanation: Optional[StructuredExplanation] = None
 
 class ChatMessage(BaseModel):
     message: str
     language: Optional[str] = "en"
     context: Optional[dict] = None
+    conversation_history: Optional[List[dict]] = None
 
 class ChatResponse(BaseModel):
     reply: str
     audio_base64: Optional[str] = None
+    explanation: Optional[StructuredExplanation] = None
+    detected_language: Optional[str] = "en"
+    quick_prompts: Optional[List[str]] = []
 
 class ChatHistoryItem(BaseModel):
     id: str
@@ -99,4 +163,15 @@ class VoiceChatResponse(BaseModel):
     transcription: str
     reply: str
     audio_base64: Optional[str] = None
+    explanation: Optional[StructuredExplanation] = None
+
+class MultimodalAnalysisResponse(BaseModel):
+    success: bool
+    crop_prediction: Optional[CropAnalysisResponse] = None
+    explanation: Optional[StructuredExplanation] = None
+    weather_context: Optional[dict] = None
+    spray_advisory: Optional[str] = None
+    recommendation: Optional[str] = None
+    audio_base64: Optional[str] = None
+
 

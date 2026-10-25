@@ -2,6 +2,7 @@ import { Outlet, NavLink, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Home, Leaf, Bot, CloudSun, Building, History, User, Languages } from 'lucide-react';
 import NotificationCenter from './NotificationCenter';
+import ErrorBoundary from './common/ErrorBoundary';
 
 export default function Layout() {
   const { t, i18n } = useTranslation();
@@ -10,6 +11,11 @@ export default function Layout() {
   const toggleLanguage = () => {
     const newLang = i18n.language === 'en' ? 'ta' : 'en';
     i18n.changeLanguage(newLang);
+    try {
+      localStorage.setItem('agronex_language', newLang);
+    } catch (e) {
+      console.warn("Could not save language to localStorage:", e);
+    }
   };
 
   const navItems = [
@@ -120,7 +126,9 @@ export default function Layout() {
 
       {/* Main Content Area */}
       <main className="flex-grow max-w-5xl mx-auto w-full px-4 sm:px-6 pt-5 pb-24 lg:pb-12">
-        <Outlet />
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
 
       {/* Mobile Floating Bottom Navigation Dock */}

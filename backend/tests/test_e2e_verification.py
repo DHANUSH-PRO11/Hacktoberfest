@@ -286,11 +286,11 @@ class TestAgroNexE2EVerification(unittest.TestCase):
         self.assertIn("open_meteo_weather_service", agent_weather_res["tools_called"])
         self.assertIsNotNone(agent_weather_res["weather_context"])
 
-        # 4. Invalid coordinates in WeatherService (Gracefully caught with offline fallback)
+        # 4. Invalid coordinates in WeatherService (Gracefully rejected with validation error)
         ws = WeatherService()
         bad_coords_result = ws.get_weather(lat=999.0, lon=999.0)
-        self.assertTrue(bad_coords_result["success"])
-        self.assertTrue(bad_coords_result.get("offline_fallback") or bad_coords_result.get("cached"))
+        self.assertFalse(bad_coords_result["success"])
+        self.assertIn("Invalid coordinates", bad_coords_result["error"])
 
     # =========================================================================
     # SCENARIO 5: Subsidies
@@ -579,12 +579,14 @@ class TestAgroNexE2EVerification(unittest.TestCase):
         bad_token_res = self.client.get("/api/auth/me", headers={"Authorization": "Bearer InvalidTokenXYZ"})
         self.assertEqual(bad_token_res.status_code, 401)
 
-        # 6. Provider timeout simulation
-        with patch("urllib.request.urlopen", side_effect=TimeoutError("Connection timed out")):
-            ws = WeatherService()
+        # 6. Provider timeout simulation (Service reports failure without inventing fake data)
+        ws = WeatherService()
+        ws._cache.clear()
+        with patch.object(ws, "_fetch_open_meteo", side_effect=TimeoutError("Connection timed out")):
             timeout_res = ws.get_weather(11.0, 77.0)
-            self.assertTrue(timeout_res["success"])
-            self.assertTrue(timeout_res.get("offline_fallback") or timeout_res.get("cached"))
+            self.assertFalse(timeout_res["success"])
+            self.assertFalse(timeout_res["data_available"])
+            self.assertIn("error", timeout_res)
 
 
 if __name__ == "__main__":

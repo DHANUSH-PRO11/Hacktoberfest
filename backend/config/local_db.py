@@ -72,9 +72,22 @@ def init_local_db():
                 confidence REAL NOT NULL,
                 severity TEXT DEFAULT 'Not determined',
                 risk_level TEXT DEFAULT 'Not determined',
+                quality_status TEXT DEFAULT 'Passed',
+                weather_context TEXT,
+                is_inconclusive INTEGER DEFAULT 0,
                 created_at TEXT NOT NULL
             );
             """)
+            # Safe migration for existing crop_analyses tables
+            cur.execute("PRAGMA table_info(crop_analyses)")
+            crop_cols = [col[1] for col in cur.fetchall()]
+            if "quality_status" not in crop_cols:
+                conn.execute("ALTER TABLE crop_analyses ADD COLUMN quality_status TEXT DEFAULT 'Passed';")
+            if "weather_context" not in crop_cols:
+                conn.execute("ALTER TABLE crop_analyses ADD COLUMN weather_context TEXT;")
+            if "is_inconclusive" not in crop_cols:
+                conn.execute("ALTER TABLE crop_analyses ADD COLUMN is_inconclusive INTEGER DEFAULT 0;")
+
             conn.execute("""
             CREATE TABLE IF NOT EXISTS chat_history (
                 id TEXT PRIMARY KEY,
@@ -84,6 +97,12 @@ def init_local_db():
                 created_at TEXT NOT NULL
             );
             """)
+
+            # Module 5: Database Indexes for Query Performance & History Retrieval
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_crop_analyses_created_at ON crop_analyses(created_at DESC);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_crop_analyses_user_id ON crop_analyses(user_id);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_history_created_at ON chat_history(created_at DESC);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_history_user_id ON chat_history(user_id);")
     finally:
         conn.close()
 
@@ -277,8 +296,11 @@ def save_crop_analysis(record: Dict[str, Any]) -> str:
     try:
         with conn:
             conn.execute("""
-            INSERT INTO crop_analyses (id, user_id, crop_type, image_path, detected_disease, confidence, severity, risk_level, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO crop_analyses (
+                id, user_id, crop_type, image_path, detected_disease, confidence,
+                severity, risk_level, quality_status, weather_context, is_inconclusive, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 rec_id,
                 record.get("user_id"),
@@ -288,18 +310,44 @@ def save_crop_analysis(record: Dict[str, Any]) -> str:
                 float(record.get("confidence", 0.0)),
                 record.get("severity", "Not determined"),
                 record.get("risk_level", "Not determined"),
+                record.get("quality_status", "Passed"),
+                record.get("weather_context"),
+                1 if record.get("is_inconclusive") else 0,
                 now
             ))
         return rec_id
     finally:
         conn.close()
 
-def get_recent_crop_analyses(limit: int = 20) -> List[Dict[str, Any]]:
+def get_recent_crop_analyses(limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
     conn = get_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM crop_analyses ORDER BY created_at DESC LIMIT ?", (limit,))
+        cur.execute("SELECT * FROM crop_analyses ORDER BY created_at DESC LIMIT ? OFFSET ?", (limit, offset))
         return [dict(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+def get_crop_stats(user_id: Optional[str] = None) -> Dict[str, Any]:
+    """Computes genuine real-time KPI metrics from actual database records."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        if user_id:
+            cur.execute("SELECT detected_disease, confidence, quality_status, is_inconclusive FROM crop_analyses WHERE user_id = ?", (user_id,))
+        else:
+            cur.execute("SELECT detected_disease, confidence, quality_status, is_inconclusive FROM crop_analyses")
+        rows = cur.fetchall()
+        total_scans = len(rows)
+        healthy_count = sum(1 for r in rows if "healthy" in (r["detected_disease"] or "").lower())
+        inconclusive_count = sum(1 for r in rows if bool(r["is_inconclusive"]) or (r["quality_status"] and r["quality_status"] != "Passed") or float(r["confidence"] or 0) < 0.60)
+        condition_alerts = sum(1 for r in rows if "healthy" not in (r["detected_disease"] or "").lower() and not bool(r["is_inconclusive"]) and float(r["confidence"] or 0) >= 0.60)
+        return {
+            "total_scans": total_scans,
+            "healthy_count": healthy_count,
+            "condition_alerts": condition_alerts,
+            "inconclusive_count": inconclusive_count
+        }
     finally:
         conn.close()
 
@@ -330,18 +378,21 @@ def save_chat_message(role: str, message: str, user_id: Optional[str] = None) ->
     finally:
         conn.close()
 
-def get_recent_chat_history(user_id: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+def get_recent_chat_history(user_id: Optional[str] = None, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
     """Retrieves recent chat history records from local SQLite."""
     conn = get_connection()
     try:
         cur = conn.cursor()
         if user_id:
-            cur.execute("SELECT * FROM chat_history WHERE user_id = ? ORDER BY created_at DESC LIMIT ?", (user_id, limit))
+            cur.execute("SELECT * FROM chat_history WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?", (user_id, limit, offset))
         else:
-            cur.execute("SELECT * FROM chat_history ORDER BY created_at DESC LIMIT ?", (limit,))
+            cur.execute("SELECT * FROM chat_history ORDER BY created_at DESC LIMIT ? OFFSET ?", (limit, offset))
         return [dict(row) for row in cur.fetchall()]
     finally:
         conn.close()
+
+# Backward-compatible alias for assistant router
+get_chat_history = get_recent_chat_history
 
 def clear_chat_history(user_id: Optional[str] = None) -> bool:
     """Clears chat messages from local SQLite."""
@@ -356,5 +407,6 @@ def clear_chat_history(user_id: Optional[str] = None) -> bool:
             return True
     finally:
         conn.close()
+
 
 

@@ -17,7 +17,18 @@ export default function CropCheck() {
   const [fileObj, setFileObj] = useState(null);
   const isTamil = i18n.language === 'ta';
 
-  const handleImageFile = (file) => {
+  const [demoSample, setDemoSample] = useState(null);
+
+  const clearImage = () => {
+    setImage(null);
+    setFileObj(null);
+    setDemoSample(null);
+    setErrorMsg(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
+  };
+
+  const handleImageFile = (file, isDemoObj = null) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
       setErrorMsg("Please upload an image file (JPG, PNG, WEBP).");
@@ -29,13 +40,14 @@ export default function CropCheck() {
     }
     setErrorMsg(null);
     setFileObj(file);
+    setDemoSample(isDemoObj);
     const img = URL.createObjectURL(file);
     setImage(img);
   };
 
   const handleImageUpload = (e) => {
     if (e.target.files && e.target.files[0]) {
-      handleImageFile(e.target.files[0]);
+      handleImageFile(e.target.files[0], null);
     }
   };
 
@@ -52,7 +64,21 @@ export default function CropCheck() {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleImageFile(e.dataTransfer.files[0]);
+      handleImageFile(e.dataTransfer.files[0], null);
+    }
+  };
+
+  const loadSampleImage = async (sample) => {
+    try {
+      setErrorMsg(null);
+      const res = await fetch(sample.path);
+      if (!res.ok) throw new Error("Sample file not found");
+      const blob = await res.blob();
+      const file = new File([blob], sample.file, { type: sample.mime });
+      handleImageFile(file, sample);
+    } catch (err) {
+      console.warn("Could not load sample:", err);
+      setErrorMsg(isTamil ? "மாதிரி படத்தை ஏற்றுவதில் சிக்கல்." : "Could not load sample image.");
     }
   };
 
@@ -63,6 +89,8 @@ export default function CropCheck() {
     
     const formData = new FormData();
     formData.append('file', fileObj);
+    formData.append('explain', 'true');
+    formData.append('language', i18n.language || 'en');
     
     try {
       const apiUrl = API_BASE_URL;
@@ -73,10 +101,18 @@ export default function CropCheck() {
       
       if (response.ok) {
         const data = await response.json();
-        navigate('/result', { state: { result: data, imageUrl: image } });
+        navigate('/result', { 
+          state: { 
+            result: data, 
+            imageUrl: image,
+            isDemo: Boolean(demoSample),
+            demoLabel: demoSample?.name,
+            demoLabelTa: demoSample?.ta
+          } 
+        });
       } else {
-        console.error('Analysis failed', response.statusText);
-        setErrorMsg(isTamil ? "படத்தை பகுப்பாய்வு செய்ய முடியவில்லை. தெளிவான படத்தை பதிவேற்றவும்." : "Unable to analyze this image. Please provide a clear leaf photo.");
+        const errJson = await response.json().catch(() => ({}));
+        setErrorMsg(errJson.detail || (isTamil ? "படத்தை பகுப்பாய்வு செய்ய முடியவில்லை. தெளிவான இலையின் படத்தை பதிவேற்றவும்." : "Unable to analyze this image. Please provide a clear leaf photo."));
       }
     } catch (error) {
       console.error('API Error:', error);
@@ -85,6 +121,7 @@ export default function CropCheck() {
       setAnalyzing(false);
     }
   };
+
 
   return (
     <div className="space-y-6 max-w-xl mx-auto pb-10">
@@ -164,7 +201,43 @@ export default function CropCheck() {
             </div>
 
             <div className="mt-6 pt-4 border-t border-gray-100 text-[11px] text-gray-400 font-medium">
-              JPG, PNG, WEBP • Max 15MB
+              JPG, PNG, WEBP • Max 10MB
+            </div>
+          </div>
+
+          {/* Quick Demo: Sample Leaf Images */}
+          <div className="bg-white p-5 rounded-3xl shadow-xs border border-gray-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                <Sparkles size={14} className="text-emerald-600" />
+                <span>{isTamil ? "சோதனை மாதிரி இலைகள் (கிளிக் செய்து பரிசோதிக்கவும்)" : "Demo Sample Leaf Images (Click to Test)"}</span>
+              </span>
+              <span className="text-[10px] bg-emerald-50 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200/60">
+                PlantVillage CC-BY 4.0
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {[
+                { name: "Tomato Early Blight", ta: "தக்காளி இலைக்கருகல்", path: "/samples/tomato_early_blight.jpg", file: "tomato_early_blight.jpg", mime: "image/jpeg", badge: "Early Blight" },
+                { name: "Potato Late Blight", ta: "உருளை இலைக்கருகல்", path: "/samples/potato_late_blight.jpg", file: "potato_late_blight.jpg", mime: "image/jpeg", badge: "Late Blight" },
+                { name: "Healthy Corn Leaf", ta: "ஆரோக்கிய சோள இலை", path: "/samples/healthy_corn.png", file: "healthy_corn.png", mime: "image/png", badge: "Healthy" },
+                { name: "Pepper Bacterial Spot", ta: "மிளகாய் பாக்டீரியா புள்ளி", path: "/samples/pepper_bacterial_spot.webp", file: "pepper_bacterial_spot.webp", mime: "image/webp", badge: "Bacterial Spot" }
+              ].map((sample, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => loadSampleImage(sample)}
+                  className="p-2.5 rounded-2xl bg-gray-50 hover:bg-emerald-50/70 border border-gray-200/70 hover:border-emerald-300 text-left transition-all group flex flex-col justify-between cursor-pointer"
+                >
+                  <div className="w-full h-16 rounded-xl overflow-hidden mb-2 bg-gray-200 border border-gray-100 flex items-center justify-center">
+                    <img src={sample.path} alt={sample.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-emerald-800 block truncate">{sample.badge}</span>
+                    <span className="text-[11px] font-medium text-gray-700 block truncate">{isTamil ? sample.ta : sample.name}</span>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
 
@@ -192,6 +265,22 @@ export default function CropCheck() {
       ) : (
         /* Image Preview & Scan Mode */
         <div className="space-y-4 animate-in fade-in zoom-in duration-300">
+          {/* Demonstration Sample Banner if in Demo Mode */}
+          {demoSample && (
+            <div className="bg-blue-50 border border-blue-200 px-4 py-2.5 rounded-2xl flex items-center justify-between text-xs text-blue-900 shadow-2xs">
+              <div className="flex items-center gap-2">
+                <span className="text-sm">🧪</span>
+                <span>
+                  <strong>{isTamil ? "மாதிரி டெமோ பயன்முறை:" : "Demonstration Mode:"} </strong>
+                  {isTamil ? `PlantVillage குறிப்பு மாதிரி (${demoSample.ta}). நேரடி பண்ணை படம் அல்ல.` : `PlantVillage benchmark sample (${demoSample.name}). For test demonstration only.`}
+                </span>
+              </div>
+              <span className="text-[10px] bg-blue-100 text-blue-800 font-mono font-bold px-2 py-0.5 rounded shrink-0">
+                DEMO
+              </span>
+            </div>
+          )}
+
           <div className="relative rounded-3xl overflow-hidden shadow-lg border-2 border-emerald-200 bg-black">
             <img src={image} alt="Crop Leaf Preview" className="w-full h-80 sm:h-96 object-cover" />
             
@@ -215,7 +304,7 @@ export default function CropCheck() {
             {!analyzing && (
               <button
                 type="button"
-                onClick={() => setImage(null)}
+                onClick={clearImage}
                 className="absolute top-3 right-3 bg-black/60 hover:bg-black/80 backdrop-blur-md text-white text-xs font-semibold px-3 py-1.5 rounded-full transition-colors flex items-center gap-1.5"
               >
                 <RefreshCw size={13} />
@@ -242,7 +331,7 @@ export default function CropCheck() {
           {!errorMsg && (
             <div className="flex gap-3">
               <button 
-                onClick={() => setImage(null)}
+                onClick={clearImage}
                 disabled={analyzing}
                 className="flex-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 py-3.5 rounded-2xl font-bold transition-colors text-sm disabled:opacity-50"
               >

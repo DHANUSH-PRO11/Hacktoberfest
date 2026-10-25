@@ -89,7 +89,7 @@ export default function LocationWeatherCard() {
       {weatherLoading ? (
         <div className="flex items-center gap-2 text-emerald-800 py-4">
           <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
-          <span className="text-sm font-semibold">{isTamil ? "நேரலை வானிலை பெறப்படுகிறது..." : "Fetching live weather..."}</span>
+          <span className="text-sm font-semibold">{isTamil ? "வானிலை முன்னறிவிப்பு பெறப்படுகிறது..." : "Fetching weather forecast..."}</span>
         </div>
       ) : current ? (
         <div className="relative z-10">

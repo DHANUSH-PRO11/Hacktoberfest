@@ -13,6 +13,7 @@ from pathlib import Path
 
 from services.ai.disease_detector import DiseaseDetector
 from services.ai.ai_assistant import AIAssistant
+from services.ai.gemma_assistant import GemmaMultimodalAssistant
 from services.weather_service import WeatherService
 from config.database import get_supabase
 from config.weather_thresholds import (
@@ -29,11 +30,14 @@ class AgroNexAgent:
         self,
         detector: Optional[DiseaseDetector] = None,
         assistant: Optional[AIAssistant] = None,
-        weather_service: Optional[WeatherService] = None
+        weather_service: Optional[WeatherService] = None,
+        gemma: Optional[GemmaMultimodalAssistant] = None
     ):
         self.detector = detector or DiseaseDetector()
         self.assistant = assistant or AIAssistant()
         self.weather_service = weather_service or WeatherService()
+        self.gemma = gemma or GemmaMultimodalAssistant()
+
 
     def run(
         self,
@@ -321,12 +325,28 @@ class AgroNexAgent:
         # Node 6: Agricultural Reasoning & Recommendation Synthesis
         # ---------------------------------------------------------
         node_start = time.perf_counter()
+        tools_called.append("gemma_multimodal_copilot")
         tools_called.append("sarvam_agricultural_reasoner")
         effective_query = active_query or (
             f"Analyze the health of this {context_packet.get('crop', 'crop')} and advise if I should spray today based on local weather."
             if crop_prediction else
             "What are the best agricultural management practices for my farm right now?"
         )
+
+        # Generate structured explainable AI assessment via Gemma 4
+        structured_explanation = None
+        if crop_prediction or image_bytes:
+            try:
+                structured_explanation = self.gemma.explain_leaf_symptoms(
+                    image_bytes=image_bytes,
+                    image_mime="image/jpeg",
+                    user_query=effective_query,
+                    crop_context=crop_prediction,
+                    weather_context=weather_data,
+                    language=language
+                )
+            except Exception as ge:
+                logger.warning(f"Gemma symptom explanation generation error: {ge}")
 
         response_text = self.assistant.answer(
             question=effective_query,
@@ -339,10 +359,12 @@ class AgroNexAgent:
             "completed",
             {
                 "response_length": len(response_text),
-                "language_used": language
+                "language_used": language,
+                "gemma_explained": bool(structured_explanation)
             },
             (time.perf_counter() - node_start) * 1000
         )
+
 
         # ---------------------------------------------------------
         # Node 7: Audio Synthesis (TTS)
@@ -440,6 +462,7 @@ class AgroNexAgent:
             "transcription": transcription,
             "language": language,
             "recommendation": response_text,
+            "explanation": structured_explanation,
             "audio_base64": audio_base64,
             "crop_prediction": crop_prediction,
             "weather_context": weather_data,

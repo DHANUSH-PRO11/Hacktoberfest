@@ -16,7 +16,38 @@ export default function Dashboard() {
   const [recentAnalyses, setRecentAnalyses] = useState([]);
   const [recentChats, setRecentChats] = useState([]);
   const [featuredSchemes, setFeaturedSchemes] = useState([]);
+  const [cropStats, setCropStats] = useState({ total_scans: 0, healthy_count: 0, condition_alerts: 0, inconclusive_count: 0 });
   const [loadingData, setLoadingData] = useState(true);
+
+  const [dashQuery, setDashQuery] = useState("");
+  const [dashLoading, setDashLoading] = useState(false);
+  const [dashReply, setDashReply] = useState(null);
+
+  const handleDashAsk = async (queryText) => {
+    const q = queryText || dashQuery;
+    if (!q || !q.trim()) return;
+    setDashLoading(true);
+    setDashReply(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/assistant/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: q,
+          language: i18n.language || 'en'
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDashReply({ query: q, answer: data.reply });
+        setDashQuery("");
+      }
+    } catch (err) {
+      console.warn("Dashboard chat error:", err);
+    } finally {
+      setDashLoading(false);
+    }
+  };
 
   const getTimeGreeting = () => {
     if (currentHour < 12) return isTamil ? "இனிய காலை வணக்கம்" : "Good Morning";
@@ -24,15 +55,24 @@ export default function Dashboard() {
     return isTamil ? "இனிய மாலை வணக்கம்" : "Good Evening";
   };
 
+
   useEffect(() => {
     const loadDashboardData = async () => {
       setLoadingData(true);
       try {
-        // 1. Fetch real crop history
-        const cropsRes = await fetch(`${API_BASE_URL}/api/crops/history`);
+        // 1. Fetch real crop history & stats
+        const [cropsRes, statsRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/crops/history`),
+          fetch(`${API_BASE_URL}/api/crops/stats`)
+        ]);
+
         if (cropsRes.ok) {
           const cropsData = await cropsRes.json();
           setRecentAnalyses(cropsData.slice(0, 3));
+        }
+        if (statsRes.ok) {
+          const statsData = await statsRes.json();
+          setCropStats(statsData);
         }
       } catch (e) {
         console.warn('Dashboard crops fetch:', e);
@@ -66,10 +106,11 @@ export default function Dashboard() {
     loadDashboardData();
   }, [isTamil]);
 
-  // Compute summary metrics from real data
-  const totalScans = recentAnalyses.length;
-  const healthyCount = recentAnalyses.filter((r) => r.is_healthy || (r.condition && r.condition.toLowerCase().includes('healthy'))).length;
-  const diseasedCount = totalScans - healthyCount;
+  // Compute summary metrics from real database statistics
+  const totalScans = cropStats.total_scans;
+  const healthyCount = cropStats.healthy_count;
+  const diseasedCount = cropStats.condition_alerts;
+  const inconclusiveCount = cropStats.inconclusive_count;
 
   return (
     <div className="space-y-6 pb-8">
@@ -91,13 +132,65 @@ export default function Dashboard() {
         <div className="flex items-center gap-2 bg-white px-3.5 py-1.5 rounded-full border border-gray-100 shadow-2xs self-start sm:self-auto">
           <Activity size={14} className="text-emerald-600" />
           <span className="text-xs font-semibold text-gray-600">
-            AI Engine: <strong className="text-emerald-700 font-bold">Online</strong>
+            Gemma 4 Copilot: <strong className="text-emerald-700 font-bold">Active</strong>
+          </span>
+        </div>
+      </div>
+
+      {/* Crop Health Overview KPI Metrics from SQLite Database */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">
+          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+            {isTamil ? "மொத்த ஆய்வுகள்" : "Total Analyses"}
+          </span>
+          <div className="text-2xl font-black text-agronex-deep mt-1 font-mono">
+            {totalScans}
+          </div>
+          <span className="text-[10px] text-emerald-700 font-semibold">
+            {isTamil ? "உண்மையான தரவுத்தளம்" : "Live Database Records"}
+          </span>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">
+          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+            {isTamil ? "ஆரோக்கிய பயிர்" : "Healthy Leaves"}
+          </span>
+          <div className="text-2xl font-black text-emerald-600 mt-1 font-mono">
+            {healthyCount}
+          </div>
+          <span className="text-[10px] text-gray-500 font-medium">
+            {totalScans > 0 ? `${Math.round((healthyCount / totalScans) * 100)}% vigor rate` : (isTamil ? "ஆய்வு செய்யப்படவில்லை" : "No scans logged")}
+          </span>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">
+          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+            {isTamil ? "கண்டறிந்த நோய்கள்" : "Condition Alerts"}
+          </span>
+          <div className="text-2xl font-black text-amber-600 mt-1 font-mono">
+            {diseasedCount}
+          </div>
+          <span className="text-[10px] text-amber-700 font-medium">
+            {diseasedCount > 0 ? (isTamil ? "கண்காணிப்பு தேவை" : "Requires monitoring") : (isTamil ? "அறிகுறிகள் இல்லை" : "Clean foliage")}
+          </span>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">
+          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+            {isTamil ? "நிச்சயமற்றவை" : "Inconclusive"}
+          </span>
+          <div className="text-2xl font-black text-blue-600 mt-1 font-mono">
+            {inconclusiveCount}
+          </div>
+          <span className="text-[10px] text-blue-700 font-semibold">
+            {isTamil ? "மறுபடம் / KVK உதவி" : "Retake / KVK recommended"}
           </span>
         </div>
       </div>
 
       {/* Main Hero Diagnostic Card */}
       <div className="relative rounded-3xl overflow-hidden shadow-lg bg-gradient-to-br from-[#081c15] via-[#1b4332] to-[#2d6a4f] p-6 sm:p-8 text-white">
+
         <div className="absolute -right-10 -bottom-10 w-60 h-60 bg-white/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -top-12 right-20 w-44 h-44 bg-emerald-400/20 rounded-full blur-2xl pointer-events-none" />
 
@@ -365,7 +458,101 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Interactive Quick AI Chat Interface with Example Questions */}
+      <div className="bg-white rounded-3xl border border-gray-200/80 p-5 sm:p-6 shadow-2xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-600 to-green-700 text-white flex items-center justify-center shadow-xs">
+              <Bot size={18} />
+            </div>
+            <div>
+              <h3 className="text-sm font-extrabold text-agronex-deep font-display">
+                {isTamil ? "அக்ரோநெக்ஸ் AI நேரடி விவசாய வழிகாட்டி" : "AgroNex AI Quick Farmer Assistant"}
+              </h3>
+              <p className="text-[11px] text-gray-400">
+                {isTamil ? "Gemma 4 அடிப்படையிலான விவசாய வினா-விடை மற்றும் வானிலை பாதுகாப்பு" : "Powered by Gemma 4 with weather risk intelligence & safe farming rules"}
+              </p>
+            </div>
+          </div>
+          <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-mono self-start sm:self-auto">
+            Bilingual AI Copilot
+          </span>
+        </div>
+
+        {/* Clickable Example Questions */}
+        <div className="space-y-1.5">
+          <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">
+            {isTamil ? "மாதிரி கேள்விகள் (உடனடி பதிலுக்கு கிளிக் செய்க):" : "Example Questions (Click to Ask):"}
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {[
+              {
+                en: "Should I spray pesticide today given tomorrow's rainfall forecast?",
+                ta: "நாளைய மழை முன்னறிவிப்பில் இன்று மருந்து தெளிக்கலாமா?"
+              },
+              {
+                en: "What are organic bio-control remedies for tomato early blight?",
+                ta: "தக்காளி இலைக்கருகல் நோய்க்கு இயற்கை தீர்வுகள் என்ன?"
+              },
+              {
+                en: "How to prevent fungal disease spread during high humidity (>80%)?",
+                ta: "அதிக ஈரப்பதம் இருக்கும்போது பூஞ்சை பரவுவதை தடுப்பது எப்படி?"
+              }
+            ].map((ex, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleDashAsk(isTamil ? ex.ta : ex.en)}
+                disabled={dashLoading}
+                className="text-xs px-3 py-1.5 bg-gray-50 hover:bg-emerald-50 text-emerald-900 border border-gray-200/80 hover:border-emerald-300 rounded-full font-medium transition-all text-left disabled:opacity-50"
+              >
+                💬 {isTamil ? ex.ta : ex.en}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Input Form */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleDashAsk();
+          }}
+          className="flex gap-2"
+        >
+          <input
+            type="text"
+            value={dashQuery}
+            onChange={(e) => setDashQuery(e.target.value)}
+            placeholder={isTamil ? "பயிர் நோய், உரம் அல்லது தெளிப்பு பற்றி கேளுங்கள்..." : "Ask about crop diseases, organic treatments, or spray timing..."}
+            className="flex-1 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+          />
+          <button
+            type="submit"
+            disabled={dashLoading || !dashQuery.trim()}
+            className="bg-agronex-primary hover:bg-agronex-deep text-white text-xs font-bold px-5 py-2.5 rounded-2xl flex items-center gap-1.5 shadow-xs transition-all disabled:opacity-50"
+          >
+            <span>{dashLoading ? (isTamil ? "பகுப்பாய்வு..." : "Thinking...") : (isTamil ? "கேளுங்கள்" : "Ask AI")}</span>
+            <ArrowRight size={14} />
+          </button>
+        </form>
+
+        {/* Direct Response Display */}
+        {dashReply && (
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50/80 to-teal-50/40 border border-emerald-200/80 space-y-2 animate-in fade-in duration-300">
+            <div className="flex items-center justify-between text-[11px] text-gray-500">
+              <span className="font-bold text-emerald-800">Q: "{dashReply.query}"</span>
+              <span className="text-[10px] bg-white px-2 py-0.5 rounded border border-emerald-100 font-mono">Gemma 4</span>
+            </div>
+            <p className="text-xs text-gray-800 leading-relaxed font-normal whitespace-pre-line">
+              {dashReply.answer}
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Featured Government Subsidies Preview */}
+
       {featuredSchemes.length > 0 && (
         <div className="bg-gradient-to-br from-emerald-50/80 to-teal-50/50 rounded-3xl border border-emerald-200/70 p-5 space-y-3">
           <div className="flex items-center justify-between">

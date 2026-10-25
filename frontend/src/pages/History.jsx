@@ -17,8 +17,10 @@ export default function History() {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('ALL'); // ALL, HEALTHY, DISEASED, UNCERTAIN
+  const [sortBy, setSortBy] = useState('NEWEST'); // NEWEST, OLDEST, CONF_HIGH, CONF_LOW
   const [selectedRecord, setSelectedRecord] = useState(null);
-  const [deletingId, setDeletingId] = useState(null);
+  const [deleteModalCandidate, setDeleteModalCandidate] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchHistory = useCallback(async () => {
     setLoading(true);
@@ -42,12 +44,15 @@ export default function History() {
     return () => clearTimeout(timer);
   }, [fetchHistory]);
 
-  const handleDelete = async (id, e) => {
+  const requestDelete = (record, e) => {
     e.stopPropagation();
-    if (!window.confirm(isTamil ? 'இந்த பதிவை நீக்க விரும்புகிறீர்களா?' : 'Are you sure you want to delete this diagnosis record?')) {
-      return;
-    }
-    setDeletingId(id);
+    setDeleteModalCandidate(record);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteModalCandidate) return;
+    setIsDeleting(true);
+    const id = deleteModalCandidate.id;
     try {
       const res = await fetch(`${API_BASE_URL}/api/crops/history/${id}`, {
         method: 'DELETE'
@@ -57,11 +62,14 @@ export default function History() {
         if (selectedRecord && selectedRecord.id === id) {
           setSelectedRecord(null);
         }
+        setDeleteModalCandidate(null);
+      } else {
+        throw new Error(`Delete failed with HTTP ${res.status}`);
       }
     } catch (err) {
       alert(err.message || 'Failed to delete record');
     } finally {
-      setDeletingId(null);
+      setIsDeleting(false);
     }
   };
 
@@ -84,26 +92,43 @@ export default function History() {
     });
   };
 
-  // Filter calculations
-  const filteredRecords = records.filter((r) => {
-    const isHealthy = r.is_healthy || (r.condition && r.condition.toLowerCase().includes('healthy'));
-    const isUncertain = r.status === 'Uncertain' || (r.confidence < 0.6);
+  // Filter & Sort calculations
+  const filteredRecords = records
+    .filter((r) => {
+      const isHealthy = r.is_healthy || (r.condition && r.condition.toLowerCase().includes('healthy'));
+      const isUncertain = r.status === 'Uncertain' || r.status === 'Inconclusive' || (r.confidence < 0.6);
 
-    let matchesStatus = true;
-    if (filterStatus === 'HEALTHY') matchesStatus = isHealthy;
-    else if (filterStatus === 'DISEASED') matchesStatus = !isHealthy;
-    else if (filterStatus === 'UNCERTAIN') matchesStatus = isUncertain;
+      let matchesStatus = true;
+      if (filterStatus === 'HEALTHY') matchesStatus = isHealthy;
+      else if (filterStatus === 'DISEASED') matchesStatus = !isHealthy;
+      else if (filterStatus === 'UNCERTAIN') matchesStatus = isUncertain;
 
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return matchesStatus;
+      const q = searchQuery.toLowerCase().trim();
+      if (!q) return matchesStatus;
 
-    const matchesQuery = 
-      (r.crop && r.crop.toLowerCase().includes(q)) ||
-      (r.condition && r.condition.toLowerCase().includes(q)) ||
-      (r.severity && r.severity.toLowerCase().includes(q));
+      const matchesQuery = 
+        (r.crop && r.crop.toLowerCase().includes(q)) ||
+        (r.condition && r.condition.toLowerCase().includes(q)) ||
+        (r.quality_status && r.quality_status.toLowerCase().includes(q)) ||
+        (r.severity && r.severity.toLowerCase().includes(q));
 
-    return matchesStatus && matchesQuery;
-  });
+      return matchesStatus && matchesQuery;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'NEWEST') {
+        return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+      }
+      if (sortBy === 'OLDEST') {
+        return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+      }
+      if (sortBy === 'CONF_HIGH') {
+        return (b.confidence || 0) - (a.confidence || 0);
+      }
+      if (sortBy === 'CONF_LOW') {
+        return (a.confidence || 0) - (b.confidence || 0);
+      }
+      return 0;
+    });
 
   // Summary Metrics
   const totalScans = records.length;
@@ -174,32 +199,47 @@ export default function History() {
           />
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-          {[
-            { id: 'ALL', labelEn: 'All', labelTa: 'அனைத்தும்' },
-            { id: 'HEALTHY', labelEn: 'Healthy', labelTa: 'ஆரோக்கியம்' },
-            { id: 'DISEASED', labelEn: 'Diseased', labelTa: 'பாதிப்பு' },
-            { id: 'UNCERTAIN', labelEn: 'Uncertain', labelTa: 'உறுதியற்றவை' }
-          ].map((pill) => (
-            <button
-              key={pill.id}
-              onClick={() => setFilterStatus(pill.id)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-                filterStatus === pill.id
-                  ? 'bg-emerald-700 text-white shadow-xs'
-                  : 'bg-white hover:bg-gray-100 text-gray-600 border border-gray-200/70'
-              }`}
-            >
-              {isTamil ? pill.labelTa : pill.labelEn}
-            </button>
-          ))}
+        {/* Filter Pills & Sort Selector */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            {[
+              { id: 'ALL', labelEn: 'All', labelTa: 'அனைத்தும்' },
+              { id: 'HEALTHY', labelEn: 'Healthy', labelTa: 'ஆரோக்கியம்' },
+              { id: 'DISEASED', labelEn: 'Diseased', labelTa: 'பாதிப்பு' },
+              { id: 'UNCERTAIN', labelEn: 'Uncertain', labelTa: 'உறுதியற்றவை' }
+            ].map((pill) => (
+              <button
+                key={pill.id}
+                onClick={() => setFilterStatus(pill.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                  filterStatus === pill.id
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'bg-white hover:bg-gray-100 text-gray-600 border border-gray-200/70'
+                }`}
+              >
+                {isTamil ? pill.labelTa : pill.labelEn}
+              </button>
+            ))}
+          </div>
+
+          {/* Sort Dropdown */}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="text-xs bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 text-gray-700 font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs cursor-pointer"
+          >
+            <option value="NEWEST">{isTamil ? 'புதியது முதலில்' : 'Newest First'}</option>
+            <option value="OLDEST">{isTamil ? 'பழையது முதலில்' : 'Oldest First'}</option>
+            <option value="CONF_HIGH">{isTamil ? 'அதிக நம்பிக்கை' : 'Highest Confidence'}</option>
+            <option value="CONF_LOW">{isTamil ? 'குறைந்த நம்பிக்கை' : 'Lowest Confidence'}</option>
+          </select>
+
           <button
             onClick={fetchHistory}
             className="p-2 bg-white hover:bg-gray-50 border border-gray-200 text-gray-600 rounded-xl transition-all shadow-2xs"
             title="Refresh History"
           >
-            <RefreshCw size={16} className={loading ? 'animate-spin text-emerald-600' : 'text-gray-500'} />
+            <RefreshCw size={15} className={loading ? 'animate-spin text-emerald-600' : 'text-gray-500'} />
           </button>
         </div>
       </div>
@@ -339,10 +379,9 @@ export default function History() {
                     </button>
                     {rec.id && (
                       <button
-                        onClick={(e) => handleDelete(rec.id, e)}
-                        disabled={deletingId === rec.id}
-                        className="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                        title="Delete Record"
+                        onClick={(e) => requestDelete(rec, e)}
+                        className="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                        title={isTamil ? "பதிவை நீக்கு" : "Delete Record"}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -352,6 +391,44 @@ export default function History() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalCandidate && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-xl border border-gray-100 space-y-4">
+            <div className="flex items-center gap-3 text-red-600">
+              <div className="w-10 h-10 rounded-2xl bg-red-50 flex items-center justify-center">
+                <Trash2 size={20} />
+              </div>
+              <h3 className="font-extrabold text-base text-gray-900">
+                {isTamil ? 'பதிவை நீக்கவா?' : 'Delete Diagnosis Record?'}
+              </h3>
+            </div>
+            <p className="text-xs text-gray-600 leading-relaxed">
+              {isTamil
+                ? `"${deleteModalCandidate.crop} - ${deleteModalCandidate.condition}" ஆய்வை நிரந்தரமாக நீக்க விரும்புகிறீர்களா? இது முகப்புப் பலகையின் புள்ளிவிவரங்களையும் புதுப்பிக்கும்.`
+                : `Are you sure you want to permanently delete the inspection record for "${deleteModalCandidate.crop} (${deleteModalCandidate.condition})"? This will also update dashboard statistics.`}
+            </p>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setDeleteModalCandidate(null)}
+                disabled={isDeleting}
+                className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                {isTamil ? 'ரத்து' : 'Cancel'}
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                {isDeleting && <RefreshCw size={13} className="animate-spin" />}
+                <span>{isTamil ? 'ஆம், நீக்கு' : 'Delete'}</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -370,7 +447,7 @@ export default function History() {
               </div>
               <button
                 onClick={() => setSelectedRecord(null)}
-                className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 cursor-pointer"
               >
                 <X size={20} />
               </button>
@@ -387,6 +464,20 @@ export default function History() {
                 <span className="text-gray-500 font-semibold">{isTamil ? 'மாதிரி நிலை:' : 'Evaluation Status:'}</span>
                 <strong className="text-gray-900 font-bold">{selectedRecord.status || 'Verified'}</strong>
               </div>
+              {selectedRecord.quality_status && selectedRecord.quality_status !== 'Passed' && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500 font-semibold">{isTamil ? 'படத் தரம்:' : 'Image Quality:'}</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                    {selectedRecord.quality_status}
+                  </span>
+                </div>
+              )}
+              {selectedRecord.weather_context && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500 font-semibold">{isTamil ? 'வானிலை சூழல்:' : 'Weather Context:'}</span>
+                  <span className="text-gray-700 font-medium">{selectedRecord.weather_context}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-gray-500 font-semibold">{isTamil ? 'அபாய நிலை:' : 'Risk Assessment:'}</span>
                 <strong className="text-gray-900 font-bold">{selectedRecord.risk || 'Normal'}</strong>
@@ -405,14 +496,14 @@ export default function History() {
             <div className="flex flex-col sm:flex-row gap-2 pt-2">
               <button
                 onClick={() => handleAskCopilot(selectedRecord)}
-                className="flex-1 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all"
+                className="flex-1 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
               >
                 <MessageSquare size={15} />
                 <span>{isTamil ? 'ஆலோசகரிடம் கேட்கவும்' : 'Consult Copilot with This Scan'}</span>
               </button>
               <button
                 onClick={() => setSelectedRecord(null)}
-                className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold"
+                className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold cursor-pointer"
               >
                 {isTamil ? 'மூடு' : 'Close'}
               </button>
