@@ -23,7 +23,14 @@ Tests:
    - API endpoints: /api/assistant/model-info, /api/assistant/chat, /api/assistant/multimodal.
 """
 
-import pytest
+try:
+    import pytest
+    fixture = pytest.fixture
+except ImportError:
+    pytest = None
+    def fixture(fn):
+        return fn
+
 import io
 import sys
 from pathlib import Path
@@ -41,7 +48,7 @@ from schemas.schemas import StructuredExplanation, ChatMessage
 client = TestClient(app)
 
 
-@pytest.fixture
+@fixture
 def sample_leaf_image_bytes():
     """Create a minimal valid RGB PNG image in-memory."""
     img = Image.new("RGB", (256, 256), color=(45, 130, 45))

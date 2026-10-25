@@ -9,7 +9,7 @@ import logging
 import os
 import time
 import uuid
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 from PIL import Image
 
 from services.ai.image_quality_service import (

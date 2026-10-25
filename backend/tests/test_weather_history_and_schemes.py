@@ -1,7 +1,10 @@
 import os
 import sys
 from pathlib import Path
-import pytest
+try:
+    import pytest
+except ImportError:
+    pytest = None
 import numpy as np
 from PIL import Image
 

@@ -37,7 +37,10 @@ import json
 import httpx
 import urllib.error
 from pathlib import Path
-import pytest
+try:
+    import pytest
+except ImportError:
+    pytest = None
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 

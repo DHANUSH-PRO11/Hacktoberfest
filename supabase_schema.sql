@@ -17,21 +17,31 @@ CREATE TABLE public.users (
 CREATE TABLE public.farmer_profiles (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    farm_size FLOAT,
-    primary_crop TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+    name TEXT,
+    mobile TEXT,
+    farm_size FLOAT DEFAULT 0.0,
+    primary_crop TEXT DEFAULT 'Paddy',
+    location TEXT DEFAULT 'Tamil Nadu',
+    preferred_language TEXT DEFAULT 'en',
+    notify_weather INTEGER DEFAULT 1,
+    notify_spray INTEGER DEFAULT 1,
+    notify_schemes INTEGER DEFAULT 1,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
 );
 
 -- 2 & 3 & 4. Crop Analysis History, Disease Prediction Results, Uploaded Images
 CREATE TABLE public.crop_analyses (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    crop_type TEXT,
-    image_path TEXT, -- Supabase Storage reference
-    detected_disease TEXT,
-    confidence FLOAT,
-    severity TEXT,
-    risk_level TEXT,
+    crop_type TEXT NOT NULL,
+    image_path TEXT, -- Storage reference or URI
+    detected_disease TEXT NOT NULL,
+    confidence FLOAT NOT NULL,
+    severity TEXT DEFAULT 'Not determined',
+    risk_level TEXT DEFAULT 'Not determined',
+    quality_status TEXT DEFAULT 'Passed',
+    weather_context TEXT,
+    is_inconclusive INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
 );
 
@@ -98,5 +108,6 @@ CREATE POLICY "Allow uploads" ON storage.objects FOR INSERT WITH CHECK (bucket_i
 CREATE INDEX IF NOT EXISTS idx_crop_analyses_created_at ON public.crop_analyses(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_crop_analyses_user_id ON public.crop_analyses(user_id);
 CREATE INDEX IF NOT EXISTS idx_chat_history_created_at ON public.chat_history(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_farmer_profiles_user_id ON public.farmer_profiles(user_id);
 CREATE INDEX IF NOT EXISTS idx_weather_alerts_created_at ON public.weather_alerts(created_at DESC);
 

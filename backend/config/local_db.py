@@ -11,7 +11,12 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 
-DB_PATH = Path(__file__).resolve().parent.parent / "agronex.db"
+import logging
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "agronex.db"
+DB_PATH = Path(os.getenv("DATABASE_PATH") or os.getenv("SQLITE_DB_PATH") or str(DEFAULT_DB_PATH))
 
 def get_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
@@ -103,6 +108,7 @@ def init_local_db():
             conn.execute("CREATE INDEX IF NOT EXISTS idx_crop_analyses_user_id ON crop_analyses(user_id);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_history_created_at ON chat_history(created_at DESC);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_history_user_id ON chat_history(user_id);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_farmer_profiles_user_id ON farmer_profiles(user_id);")
     finally:
         conn.close()
 
@@ -352,13 +358,30 @@ def get_crop_stats(user_id: Optional[str] = None) -> Dict[str, Any]:
         conn.close()
 
 def delete_crop_analysis(record_id: str) -> bool:
-    """Deletes a crop analysis record from local database by ID."""
+    """Deletes a crop analysis record from local database by ID and cleans up local thumbnail if applicable."""
     conn = get_connection()
     try:
+        cur = conn.cursor()
+        cur.execute("SELECT image_path FROM crop_analyses WHERE id = ?", (record_id,))
+        row = cur.fetchone()
+        image_path = row["image_path"] if row and "image_path" in row.keys() else None
+
         with conn:
-            cur = conn.cursor()
             cur.execute("DELETE FROM crop_analyses WHERE id = ?", (record_id,))
-            return cur.rowcount > 0
+            deleted = cur.rowcount > 0
+
+        # Safely remove local thumbnail from uploads directory if present
+        if deleted and image_path and not str(image_path).startswith("http"):
+            try:
+                local_file = Path(image_path)
+                if not local_file.is_absolute():
+                    local_file = Path(__file__).resolve().parent.parent / image_path
+                if local_file.exists() and local_file.is_file():
+                    local_file.unlink()
+            except Exception as e:
+                logger.debug(f"Thumbnail cleanup notice for {image_path}: {e}")
+
+        return deleted
     finally:
         conn.close()
 

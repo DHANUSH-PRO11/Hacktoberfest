@@ -11,6 +11,10 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMMA_MODEL
+        value: "gemini-2.5-flash"
       - key: SARVAM_API_KEY
         sync: false
       - key: SUPABASE_URL

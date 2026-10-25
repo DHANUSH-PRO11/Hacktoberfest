@@ -9,6 +9,9 @@ services:
     ports:
       - "8000:8000"
     environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - GEMMA_MODEL=${GEMMA_MODEL:-gemini-2.5-flash}
       - SARVAM_API_KEY=${SARVAM_API_KEY:-}
       - SUPABASE_URL=${SUPABASE_URL:-}
       - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY:-}

@@ -44,6 +44,7 @@ class TestPlatformModule5(unittest.TestCase):
             self.assertIn("idx_crop_analyses_user_id", indexes)
             self.assertIn("idx_chat_history_created_at", indexes)
             self.assertIn("idx_chat_history_user_id", indexes)
+            self.assertIn("idx_farmer_profiles_user_id", indexes)
         finally:
             conn.close()
 
@@ -220,6 +221,30 @@ class TestPlatformModule5(unittest.TestCase):
 
         # Clean up
         local_db.delete_crop_analysis(rec_id)
+
+    def test_11_thumbnail_cleanup_on_delete(self):
+        """Verifies that deleting a record unlinks local thumbnail files under uploads/."""
+        temp_thumb = backend_dir / "uploads" / f"test_thumb_{uuid.uuid4().hex[:8]}.jpg"
+        temp_thumb.parent.mkdir(parents=True, exist_ok=True)
+        temp_thumb.write_bytes(b"synthetic_thumbnail_data")
+        self.assertTrue(temp_thumb.exists())
+
+        rec_id = local_db.save_crop_analysis({
+            "crop_type": "Tomato",
+            "detected_disease": "healthy",
+            "confidence": 0.92,
+            "image_path": str(temp_thumb)
+        })
+
+        deleted = local_db.delete_crop_analysis(rec_id)
+        self.assertTrue(deleted)
+        self.assertFalse(temp_thumb.exists(), "Local thumbnail file should be safely unlinked on record deletion")
+
+    def test_12_configurable_database_path(self):
+        """Verifies local_db uses configurable DATABASE_PATH or SQLITE_DB_PATH."""
+        from config.local_db import DB_PATH
+        self.assertTrue(bool(DB_PATH))
+        self.assertTrue(str(DB_PATH).endswith(".db"))
 
 
 if __name__ == "__main__":

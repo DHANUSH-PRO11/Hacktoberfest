@@ -384,28 +384,34 @@ The Vite React app will be live at: `http://localhost:5173`
 
 ---
 
-## 📡 Key API Endpoints
+## 📡 Comprehensive API Contracts
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `POST` | `/api/crops/analyze` | Upload JPEG, PNG, or WebP leaf image for neural classification and Gemma 4 explainability |
+| `GET` | `/health` / `/api/health` | Lightweight service health probe; `?detail=true` exposes full 5-module telemetry |
+| `POST` | `/api/crops/analyze` | Ingests leaf photo (JPEG/PNG/WebP, max 10MB), executes quality gate, ONNX inference, and Gemma 4 explanation |
 | `GET` | `/api/crops/stats` | Real-time database KPI counters (total scans, healthy, condition alerts, inconclusive) |
-| `GET` | `/api/crops/history` | Retrieve saved crop inspection records (SQLite / Supabase) |
-| `DELETE`| `/api/crops/history/{id}` | Delete a diagnosis record |
-| `POST` | `/api/assistant/multimodal` | Multimodal leaf image + text query via Gemma 4 |
-| `POST` | `/api/assistant/chat` | Conversational Q&A in Tamil or English |
-| `POST` | `/api/assistant/voice` | Bilingual audio transcription and voice synthesis |
-| `GET` | `/api/weather/forecast` | Open-Meteo hourly & 7-day micro-climate weather feed |
-| `GET` | `/api/weather/risk` | Crop-specific environmental risk synthesis with scientific disclaimer |
-| `POST` | `/api/agent/run` | Full 10-step autonomous multimodal agent execution |
-| `GET` | `/api/schemes` | Indian agricultural schemes and subsidies directory |
+| `GET` | `/api/crops/history` | Chronological inspection records with pagination (`limit`, `offset`) |
+| `DELETE`| `/api/crops/history/{id}` | Deletes diagnosis record and updates dashboard metrics in real time |
+| `POST` | `/api/assistant/chat` | Bilingual conversational Q&A in Tamil or English with multi-turn memory |
+| `POST` | `/api/assistant/multimodal`| Multimodal leaf image + farmer question reasoning via Gemma 4 |
+| `POST` | `/api/assistant/voice` | Bilingual audio transcription (STT) and voice synthesis (TTS via Sarvam AI) |
+| `GET` | `/api/assistant/model-info`| Real-time Gemma 4 endpoint verification, fallback state, and supported languages |
+| `GET` | `/api/assistant/history` | Conversational history with pagination (`limit`, `offset`) |
+| `DELETE`| `/api/assistant/history` | Clears conversational history in SQLite and Supabase |
+| `GET` | `/api/weather/forecast` | Open-Meteo hourly & 7-day micro-climate weather feed with metric units |
+| `GET` | `/api/weather/spray-advisory`| Dedicated 24h spray window evaluation against configurable rain/wind caution thresholds |
+| `GET` | `/api/weather/risk` | Crop-specific environmental risk synthesis with scientific limitation disclaimer |
+| `GET` | `/api/weather/status` | Weather service operational health and cache statistics |
+| `GET` | `/api/schemes` | Verified Indian & Tamil Nadu schemes with Central/State and category filtering |
+| `POST` | `/api/agent/run` | Full 10-step autonomous multimodal agent execution trace |
 
 ---
 
 ## 🗄️ Database Architecture & PostgreSQL Migration Guide
 
 AgroNex AI features an **Offline-First Dual-Database Strategy**:
-1. **Local SQLite (`agronex.db`)**: Zero-configuration embedded database for standalone edge deployments on farm laptops, tablets, or Raspberry Pi field computers.
+1. **Local SQLite (`agronex.db`)**: Zero-configuration embedded database for standalone edge deployments on farm laptops, tablets, or Raspberry Pi field computers. Features dedicated B-tree indexes on `(created_at DESC)` and `(user_id)` for high-throughput queries.
 2. **Supabase / PostgreSQL**: Cloud database for multi-user production synchronization, automatic backups, and managed object storage for high-resolution leaf images.
 
 ### Migrating from SQLite to PostgreSQL / Supabase
@@ -457,6 +463,9 @@ When transitioning to production PostgreSQL, follow these steps:
        created_at TIMESTAMPTZ DEFAULT NOW()
    );
 
+   CREATE INDEX idx_crop_analyses_created_at ON crop_analyses(created_at DESC);
+   CREATE INDEX idx_crop_analyses_user_id ON crop_analyses(user_id);
+
    -- Conversational History
    CREATE TABLE chat_history (
        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -465,6 +474,9 @@ When transitioning to production PostgreSQL, follow these steps:
        message TEXT NOT NULL,
        created_at TIMESTAMPTZ DEFAULT NOW()
    );
+
+   CREATE INDEX idx_chat_history_created_at ON chat_history(created_at DESC);
+   CREATE INDEX idx_chat_history_user_id ON chat_history(user_id);
    ```
 
 2. **Supabase Storage Bucket**:
@@ -482,20 +494,23 @@ When transitioning to production PostgreSQL, follow these steps:
 
 ## 🧪 Automated Testing & Verification
 
-AgroNex includes a comprehensive test suite covering computer vision inference, image format validation, Gemma 4 structured outputs, weather risk calculations, and safety rules:
+AgroNex includes a rigorous automated test suite covering all 5 architectural modules:
 
 ```bash
 cd backend
 pytest -v
 ```
 
-### Test Coverage Highlights (88+ Passed Tests Across 6 Suites):
-- ✅ **Module 1 Crop Intelligence Engine (`test_crop_intelligence_module1.py`)**: 28 dedicated unit & contract tests verifying JPEG/PNG/WebP validation, 10MB limit enforcement, corrupted byte rejection, image quality metrics (resolution, darkness, glare, Laplacian blur, texture), singleton ONNX session reuse, 38-class mapping, top-5 ranking, and uncertainty gates.
+### Complete Test Suite Results: **127 Passed, 0 Failed (100% Pass Rate)**
+- ✅ **Module 5: Platform, Integration, Security & Telemetry (`test_platform_module5.py`)**: 10 tests verifying SQLite indexes, pagination (`limit`/`offset`), stats increment/decrement consistency, inconclusive tracking, chat history aliases, security headers (`nosniff`, `DENY`), health telemetry, upload validation, schemes structure, and simulated restart persistence.
+- ✅ **Module 3: Weather Intelligence & Farm Safety (`test_weather_intelligence_module3.py`)**: 22 tests verifying coordinate validation, WMO code translation, Open-Meteo forecast payloads, hourly resolution, 7-day outlook, environmental risk evaluation, and spray advisory threshold triggers.
+- ✅ **Module 2: Gemma Multimodal Copilot (`test_gemma_copilot_module2.py`)**: 13 tests verifying model verification endpoint transparency, multimodal leaf explanation structure, Tamil vernacular responses, and offline fallback grounding.
+- ✅ **Module 1: Crop Intelligence Engine (`test_crop_intelligence_module1.py`)**: 28 tests verifying JPEG/PNG/WebP validation, 10MB limit enforcement, corrupted byte rejection, image quality metrics (resolution, darkness, glare, Laplacian blur, texture), singleton ONNX session reuse, 38-class mapping, top-5 ranking, and uncertainty gates.
 - ✅ **Computer Vision Benchmark (`test_model.py`)**: All 12 automated image preprocessing scenarios passed, including EXIF rotation, alpha compositing, letterbox padding, batch softmax numerical stability, and TTA benchmarks.
 - ✅ **End-to-End Agent Verification (`test_e2e_verification.py`)**: 10 comprehensive scenarios covering workflow manifests, image diagnosis, weather, subsidies, voice pipelines, and execution trace integrity.
-- ✅ **Gemma 4 Structured Reasoner & Weather Risk (`test_gemma_and_weather_risk.py`)**: Validates JSON schema fields, Tamil (`ta`) and English (`en`) outputs, and environmental risk calculations.
-- ✅ **API Endpoints & Authentication (`test_api_endpoints.py`)**: Tests JWT auth, registration, farmer profile updates, schemes, and history deletion.
-- ✅ **Weather, History & Schemes (`test_weather_history_and_schemes.py`)**: Tests Open-Meteo alerts, PM-KISAN subsidy directory, and SQLite/Supabase synchronization.
+- ✅ **Gemma 4 Structured Reasoner & Weather Risk (`test_gemma_and_weather_risk.py`)**: 12 tests validating JSON schema fields, Tamil (`ta`) and English (`en`) outputs, and environmental risk calculations.
+- ✅ **API Endpoints & Authentication (`test_api_endpoints.py`)**: 12 tests covering JWT auth, registration, farmer profile updates, schemes, and history deletion.
+- ✅ **Weather, History & Schemes (`test_weather_history_and_schemes.py`)**: 14 tests covering Open-Meteo alerts, PM-KISAN subsidy directory, and SQLite/Supabase synchronization.
 
 ---
 

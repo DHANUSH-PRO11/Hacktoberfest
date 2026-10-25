@@ -33,12 +33,14 @@ if os.getenv("VERCEL_URL"):
 if os.getenv("VERCEL_PROJECT_PRODUCTION_URL"):
     origins.append(f"https://{os.getenv('VERCEL_PROJECT_PRODUCTION_URL')}")
 
-# Explicit development wildcard override
-allow_all = os.getenv("ALLOW_ALL_ORIGINS", "true").lower() in ("true", "1")
-if allow_all and not origins:
-    origins = ["*"]
-elif allow_all and "*" not in origins:
-    origins.append("*")
+# Explicit development wildcard override (disabled in production unless explicitly set)
+is_production = os.getenv("ENVIRONMENT", "development").lower() == "production"
+allow_all = os.getenv("ALLOW_ALL_ORIGINS", "false" if is_production else "true").lower() in ("true", "1")
+if allow_all and not is_production:
+    if not origins:
+        origins = ["*"]
+    elif "*" not in origins:
+        origins.append("*")
 
 # 2. CORS Middleware
 app.add_middleware(
