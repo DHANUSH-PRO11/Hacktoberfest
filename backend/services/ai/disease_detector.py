@@ -206,7 +206,7 @@ class DiseaseDetector:
             status = "Moderate confidence"
             conf_interpretation = (
                 f"Moderate visual similarity ({score_percent:.1f}% match). "
-                "Observation is consistent with {condition}, but secondary symptoms should be monitored."
+                f"Observation is consistent with {condition}, but secondary symptoms should be monitored."
                 if not is_tamil else
                 f"மிதமான காட்சிப் பொருத்தம் ({score_percent:.1f}%). பயிர் மாற்றங்களை தொடர்ந்து கவனிக்கவும்."
             )

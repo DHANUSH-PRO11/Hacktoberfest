@@ -196,8 +196,10 @@ export default function Result() {
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
             <span>{isTamil ? "AI காட்சி மாதிரி கணிப்பு (அனுமானம்) — ஆய்வக பரிசோதனை அல்ல" : "AI Visual Hypothesis — Model observation, not a laboratory confirmation"}</span>
           </span>
-          <span className="text-[10px] bg-emerald-800/80 px-2 py-0.5 rounded font-mono">
-            {result.explanation?.model_used || "Gemma 4"}
+          <span className={`text-[10px] px-2 py-0.5 rounded font-mono ${result.explanation?.is_fallback ? "bg-amber-900/80 text-amber-200 border border-amber-700/50" : "bg-emerald-800/80 text-emerald-200"}`}>
+            {result.explanation?.is_fallback 
+              ? (isTamil ? "ஆஃப்லைன் தகவல் தளம் (Grounding Fallback)" : (result.explanation?.model_used || "Grounding Fallback Engine"))
+              : (result.explanation?.model_used || "Gemma 4")}
           </span>
         </div>
 

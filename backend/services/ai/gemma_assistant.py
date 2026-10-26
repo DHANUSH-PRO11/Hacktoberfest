@@ -832,7 +832,7 @@ OUTPUT STRICT VALID JSON ONLY containing these exact 10 keys:
             "symptoms": symptoms,
             "recommendations": steps,
             "preventive_measures": prevention,
-            "model_used": "Gemma 4 (Agricultural Grounding Engine)",
+            "model_used": "AgroNex Grounded Pathology Engine (Offline Fallback)",
             "is_fallback": True,
             "language": lang
         }

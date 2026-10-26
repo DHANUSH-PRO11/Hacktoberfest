@@ -985,11 +985,11 @@ export default function Assistant() {
                 <div className="mb-2.5 p-3.5 rounded-2xl bg-emerald-50/90 border border-emerald-200/80 text-xs text-gray-800 space-y-2.5">
                   <div className="flex items-center justify-between border-b border-emerald-100 pb-1.5">
                     <span className="font-bold text-emerald-950 flex items-center gap-1.5">
-                      <Sparkles size={13} className="text-emerald-600" />
-                      <span>{msg.explanation.model_used || "Gemma 4 Multimodal Assessment"}</span>
+                      <Sparkles size={13} className={msg.explanation.is_fallback ? "text-amber-600" : "text-emerald-600"} />
+                      <span>{msg.explanation.is_fallback ? (msg.explanation.model_used || "Pathology Grounding Fallback") : (msg.explanation.model_used || "Gemma 4 Multimodal Assessment")}</span>
                     </span>
-                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full font-mono">
-                      Explainable AI
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-mono ${msg.explanation.is_fallback ? "bg-amber-100 text-amber-900 border border-amber-200" : "bg-emerald-100 text-emerald-800"}`}>
+                      {msg.explanation.is_fallback ? "Offline Grounding" : "Explainable AI"}
                     </span>
                   </div>
 
